@@ -14,10 +14,7 @@
           <div class="profile-field"><strong>Username:</strong> {{ user.username }}</div>
           <div class="profile-field"><strong>Email:</strong> {{ user.email }}</div>
           <div class="profile-field">
-            <strong>Member Since:</strong> {{ formatDate(user.memberSince) }}
-          </div>
-          <div class="profile-field">
-            <strong>Last Login:</strong> {{ formatDate(user.lastLogin) }}
+            <strong>Member Since:</strong> {{ formatDate(user.createdAt) }}
           </div>
         </div>
       </template>
@@ -36,8 +33,7 @@ export default defineComponent({
     const user = ref<User>({
       username: '',
       email: '',
-      memberSince: '',
-      lastLogin: ''
+      createdAt: ''
     })
 
     const fetchUserProfile = async () => {

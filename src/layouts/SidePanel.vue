@@ -38,15 +38,14 @@
 </template>
 
 <script lang="ts">
-import { useCookies } from '@/utils/cookies'
 import { defineComponent, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from '@/axios-config'
+import { getCookies } from '@/utils/cookies'
 
 export default defineComponent({
   setup() {
     const router = useRouter()
-    const cookies = useCookies()
     const unseenCount = ref<number>(0)
 
     const fetchUnseenNotifications = async () => {
@@ -59,6 +58,7 @@ export default defineComponent({
     }
 
     const handleLogout = () => {
+      const cookies = getCookies()
       cookies?.remove('auth_token')
       router.push({ name: 'Login' })
     }

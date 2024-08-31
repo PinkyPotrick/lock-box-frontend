@@ -63,7 +63,6 @@ export default defineComponent({
     const confirmPassword = ref('')
     const router = useRouter()
     const toast = useToast()
-    // const cookies = useCookies()
 
     const register = async () => {
       if (password.value !== confirmPassword.value) {

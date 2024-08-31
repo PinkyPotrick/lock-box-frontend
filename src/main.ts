@@ -1,4 +1,5 @@
 import { createApp } from 'vue'
+import { initializeCookies } from './utils/cookies'
 import App from './App.vue'
 import router from './router'
 import axios from 'axios'
@@ -78,7 +79,7 @@ const app = createApp(App)
 //   }
 // })
 
-axios.defaults.baseURL = 'http://localhost:8080' // Our backend server
+axios.defaults.baseURL = 'http://localhost:8080' // LockBox server
 
 app.use(PrimeVue, {
   theme: {
@@ -91,9 +92,12 @@ app.use(PrimeVue, {
     }
   }
 })
-app.use(VueCookies, { expires: '15min' })
+app.use(VueCookies)
 app.use(ToastService)
 app.use(router)
+
+// Initialize the cookie utility
+initializeCookies(app)
 
 app
   .component('p-button', Button)

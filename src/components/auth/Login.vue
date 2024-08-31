@@ -38,7 +38,6 @@ export default defineComponent({
     const password = ref('')
     const router = useRouter()
     const toast = useToast()
-    // const cookies = useCookies()
 
     const login = async () => {
       try {

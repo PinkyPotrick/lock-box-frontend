@@ -1,6 +1,7 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <template>
   <div class="header">
+    <!-- <p>logged in??? {{ isLoggedIn() }}</p> -->
     <div class="darmkode-container" v-if="isLoggedIn()">
       <p-toggle-button
         class="darkmode-button"
@@ -45,7 +46,7 @@ export default defineComponent({
 .darmkode-container {
   display: flex;
   flex-direction: row;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: center;
 }
 

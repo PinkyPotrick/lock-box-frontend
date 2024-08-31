@@ -36,7 +36,13 @@
 
 .footer,
 .header {
-  height: 3vh;
+  height: 4vh;
+}
+
+.footer {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
 }
 
 .login-container,
