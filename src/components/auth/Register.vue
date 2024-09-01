@@ -53,7 +53,6 @@ import { defineComponent, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { handleRegister } from '@/utils/auth'
 import { useToast } from 'primevue/usetoast'
-// import { useCookies } from '@/utils/cookies'
 
 export default defineComponent({
   setup() {

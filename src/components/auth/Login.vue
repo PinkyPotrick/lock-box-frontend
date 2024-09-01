@@ -28,7 +28,6 @@
 <script lang="ts">
 import { defineComponent, ref } from 'vue'
 import { useRouter } from 'vue-router'
-// import { useCookies } from '@/utils/cookies'
 import { handleLogin } from '@/utils/auth'
 import { useToast } from 'primevue/usetoast'
 

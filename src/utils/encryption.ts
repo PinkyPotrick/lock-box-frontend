@@ -112,6 +112,10 @@ export function decryptWithPrivateKey(encryptedData: string, privateKeyPem: stri
   return forge.util.decodeUtf8(decrypted)
 }
 
+/**
+ * Generates a random 32 bytes AES key
+ * @returns a base 64 AES key
+ */
 export function generateAESKey() {
   return forge.util.encode64(forge.random.getBytesSync(32)) // AES-256, so 32 bytes key
 }
