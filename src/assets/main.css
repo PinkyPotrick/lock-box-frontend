@@ -34,9 +34,12 @@
   }
 } */
 
-.footer,
 .header {
   height: 4vh;
+}
+
+.footer {
+  height: 2vh;
 }
 
 .footer {
