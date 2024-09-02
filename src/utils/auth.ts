@@ -20,12 +20,10 @@ const N_BASE16 = 'EEAF0AB9ADB38DD69C33F80AFA8FC5E860726187' // The group paramet
 const g_BASE16 = '2' // The group parameter g, a generator modulo N.
 const N = BigInt(`0x${N_BASE16}`) // Convert N from hex to a bigint
 const g = BigInt(g_BASE16) // Convert g from hex to a bigint
-const k = BigInt(3) // Multiplier parameter
 
 console.log('CONSTANTS:') //TODO delete console logs !!!
 console.log('N:', N) //TODO delete console logs !!!
 console.log('g:', g) //TODO delete console logs !!!
-console.log('k:', k) //TODO delete console logs !!!
 
 /**
  * Performs modular exponentiation: (base^exp) % mod.
@@ -239,8 +237,19 @@ function computeK(S: bigint): string {
   return forge.util.bytesToHex(K_bytes)
 }
 
+function toBinaryString(data: Uint8Array): string {
+  return Array.from(data)
+    .map((byte) => byte.toString(2).padStart(8, '0')) // Convert each byte to binary and pad
+    .join('') // Join all binary strings together
+}
+function stringToHex(str: string): string {
+  return Array.from(str)
+    .map((char) => char.charCodeAt(0).toString(16).padStart(2, '0'))
+    .join('')
+}
+
 /**
- * Computes the client's proof
+ * Computes the client's first proof.
  *
  * @example M = H(H(N) XOR H(g) | H(U) | s | A | B | K)
  *
@@ -251,19 +260,95 @@ function computeK(S: bigint): string {
  * @param K - The session key K.
  * @returns The client's proof M as a hexadecimal string.
  */
-function computeM(username: string, salt: string, A: bigint, B: bigint, K: string): string {
-  // Compute H(N), H(g) and H(U)
-  const H_N = forge.md.sha1
-    .create()
-    .update(forge.util.hexToBytes(N.toString(16)))
-    .digest()
-    .getBytes()
-  const H_g = forge.md.sha1
+function computeM1(username: string, salt: string, A: bigint, B: bigint, K: string): string {
+  // Convert the relevant data to binary strings
+  const usernameHex = stringToHex(username)
+  const byteStringUsername: string = forge.util.hexToBytes(usernameHex)
+  const usernameBytes: Uint8Array = new Uint8Array(byteStringUsername.length)
+  for (let i = 0; i < byteStringUsername.length; i++) {
+    usernameBytes[i] = byteStringUsername.charCodeAt(i)
+  }
+  const usernameBinary = toBinaryString(usernameBytes)
+
+  const saltHex = stringToHex(salt)
+  const byteStringSalt: string = forge.util.hexToBytes(saltHex)
+  const saltBytes: Uint8Array = new Uint8Array(byteStringSalt.length)
+  for (let i = 0; i < byteStringSalt.length; i++) {
+    saltBytes[i] = byteStringSalt.charCodeAt(i)
+  }
+  const saltBinary = toBinaryString(saltBytes)
+
+  const aHex = stringToHex(A.toString(16))
+  const byteStringA: string = forge.util.hexToBytes(aHex)
+  const aBytes: Uint8Array = new Uint8Array(byteStringA.length)
+  for (let i = 0; i < byteStringA.length; i++) {
+    aBytes[i] = byteStringA.charCodeAt(i)
+  }
+  const A_binary = toBinaryString(aBytes)
+
+  const bHex = stringToHex(B.toString(16))
+  const byteStringB: string = forge.util.hexToBytes(bHex)
+  const bBytes: Uint8Array = new Uint8Array(byteStringB.length)
+  for (let i = 0; i < byteStringB.length; i++) {
+    bBytes[i] = byteStringB.charCodeAt(i)
+  }
+  const B_binary = toBinaryString(bBytes)
+
+  const kHex = stringToHex(K)
+  const byteStringK: string = forge.util.hexToBytes(kHex)
+  const kBytes: Uint8Array = new Uint8Array(byteStringK.length)
+  for (let i = 0; i < byteStringK.length; i++) {
+    kBytes[i] = byteStringK.charCodeAt(i)
+  }
+  const K_binary = toBinaryString(kBytes)
+
+  // Log the binary representations
+  console.log('Username (binary):', usernameBinary)
+  console.log('Salt (binary):', saltBinary)
+  console.log('A (binary):', A_binary)
+  console.log('B (binary):', B_binary)
+  console.log('K (binary):', K_binary)
+
+  const A_bytes = forge.util.hexToBytes(A.toString(16))
+  // const B_bytes = forge.util.hexToBytes(B.toString(16))
+  // const K_bytes = forge.util.hexToBytes(K)
+
+  console.log('A (bytes):', forge.util.bytesToHex(A_bytes))
+  // console.log('B (bytes):', forge.util.bytesToHex(B_bytes))
+  // console.log('K (bytes):', forge.util.bytesToHex(K_bytes))
+
+  // Convert A and B to byte buffers
+  // const A_bytes = forge.util.hexToBytes(A.toString(16))
+  // const B_bytes = forge.util.hexToBytes(B.toString(16))
+
+  let B_hex = B.toString(16)
+  if (B_hex.length % 2 !== 0) {
+    B_hex = '0' + B_hex // Ensure even-length hex string
+  }
+  const B_bytes = forge.util.hexToBytes(B_hex)
+  console.log('B (bytes):', forge.util.bytesToHex(B_bytes))
+
+  const H_g = forge.md.sha256
     .create()
     .update(forge.util.hexToBytes(g.toString(16)))
     .digest()
     .getBytes()
-  const H_U = forge.md.sha1.create().update(username).digest().toHex()
+  const H_U = forge.md.sha256.create().update(username).digest().getBytes()
+
+  console.log('H_g (hex):', forge.util.bytesToHex(H_g))
+  console.log('H_U (hex):', forge.util.bytesToHex(H_U))
+
+  // Compute H(N)
+  let N_hex = N.toString(16)
+
+  // Add a leading zero if necessary to match the backend representation
+  if (N_hex.length % 2 !== 0 || parseInt(N_hex[0], 16) >= 8) {
+    N_hex = '00' + N_hex
+  }
+
+  const N_bytes = forge.util.hexToBytes(N_hex)
+  const H_N = forge.md.sha256.create().update(N_bytes).digest().getBytes() // Now hash this correctly to match the backend
+  console.log('H_N (hex):', H_N)
 
   // XOR the hashes byte by byte H(N) XOR H(g)
   const H_N_XOR_H_g = new Uint8Array(H_N.length)
@@ -271,16 +356,47 @@ function computeM(username: string, salt: string, A: bigint, B: bigint, K: strin
     H_N_XOR_H_g[i] = H_N.charCodeAt(i) ^ H_g.charCodeAt(i)
   }
 
-  // Compute M = H(H(N) XOR H(g) | H(U) | s | A | B | K)
-  const M = forge.md.sha1.create()
-  M.update(forge.util.binary.raw.encode(H_N_XOR_H_g))
-  M.update(forge.util.hexToBytes(H_U))
-  M.update(forge.util.hexToBytes(salt))
-  M.update(forge.util.hexToBytes(A.toString(16)))
-  M.update(forge.util.hexToBytes(B.toString(16)))
-  M.update(forge.util.hexToBytes(K))
+  // Convert to signed bytes for comparison with Java
+  const signedH_N_XOR_H_g = new Int8Array(H_N_XOR_H_g.length)
+  for (let i = 0; i < H_N_XOR_H_g.length; i++) {
+    signedH_N_XOR_H_g[i] = H_N_XOR_H_g[i] > 127 ? H_N_XOR_H_g[i] - 256 : H_N_XOR_H_g[i]
+  }
 
-  return M.digest().toHex()
+  const stringSignedH_N_XOR_H_g = Array.from(signedH_N_XOR_H_g)
+    .map((byte) => String.fromCharCode(byte))
+    .join('')
+  console.log('H_N_XOR_H_g (hex):', forge.util.bytesToHex(stringSignedH_N_XOR_H_g))
+  // console.log('Before H_N_XOR_H_g (signed):', signedH_N_XOR_H_g)
+
+  // Convert the signed Int8Array to a string using forge's buffer utility
+  const buffer = forge.util.createBuffer(signedH_N_XOR_H_g.buffer)
+
+  // Convert K from a hex string to bytes, and strip any leading zeroes
+  let K_bytes = forge.util.hexToBytes(K)
+  if (K_bytes[0] === '\x00') {
+    K_bytes = K_bytes.substring(1)
+  }
+  console.log('K_bytes (hex):', forge.util.bytesToHex(K_bytes))
+
+  const digest = forge.md.sha256.create()
+  console.log('Initial Digest State:', digest.digest().toHex())
+  digest.update(buffer.getBytes())
+  console.log('After H_N_XOR_H_g:', digest.digest().toHex())
+  digest.update(H_U)
+  console.log('After H_U:', digest.digest().toHex())
+  digest.update(forge.util.hexToBytes(salt))
+  console.log('After Salt:', digest.digest().toHex())
+  digest.update(A_bytes)
+  console.log('After A:', digest.digest().toHex())
+  digest.update(B_bytes)
+  console.log('After B:', digest.digest().toHex())
+  digest.update(forge.util.hexToBytes(K))
+  console.log('After K:', digest.digest().toHex())
+
+  const M1 = digest.digest().toHex()
+  console.log('M1:', M1)
+
+  return M1
 }
 
 /**
@@ -361,8 +477,12 @@ export const handleRegister = async (username: string, email: string, password: 
     const { publicKeyPem: clientPublicKeyPem, privateKeyPem: clientPrivateKeyPem } =
       await getClientKeyPair(username, password)
 
+    // Encrypt the username using a derived key from the username and password
+    const derivedKey = deriveEncryptionKey(username, password)
+    const derivedUsername = encryptUsername(username, derivedKey)
+
     const salt = generateSalt() // Generate a random salt
-    const verifier = computeVerifier(salt, username, password) // Compute the verifier
+    const verifier = computeVerifier(salt, derivedUsername, password) // Compute the verifier using the derived username
     const serverPublicKeyPem = await fetchPublicKey() // Fetch the server's public key
     const aesKey = generateAESKey() // Generate an AES key
 
@@ -391,10 +511,6 @@ export const handleRegister = async (username: string, email: string, password: 
       hmac: hmacClientPrivateKey
     } = encryptWithAESCBC(clientPrivateKeyPem, aesKey)
 
-    // Encrypt the username using a derived key from the username and password
-    const derivedKey = deriveEncryptionKey(username, password)
-    const derivedUsername = encryptUsername(username, derivedKey)
-
     // Prepare the encrypted data to be sent to the server for registration
     const encryptedData = {
       derivedKey: encryptWithPublicKey(derivedKey, serverPublicKeyPem),
@@ -418,7 +534,7 @@ export const handleRegister = async (username: string, email: string, password: 
       },
       helperAesKey: aesKey // This value cannot be encrypted (it should be protected by SSL)
     }
-    console.log('Registering user...')
+    console.log('Registering user...') //TODO delete console logs !!!
     const { encryptedSessionToken, helperAesKey } = await registerUser(encryptedData)
 
     // Decrypt the retrieved session token
@@ -503,6 +619,9 @@ export const handleLogin = async (username: string, password: string) => {
       },
       helperAesKey: aesKey // This value cannot be encrypted (it should be protected by SSL)
     }
+    const A_bytes = forge.util.hexToBytes(clientPublicValueA.toString(16))
+    console.log('[FE before fetch SRP] A (bytes):', forge.util.bytesToHex(A_bytes))
+
     console.log('Fetching SRP user...') //TODO delete console logs !!!
     const { encryptedServerPublicValueB, helperSrpParamsAesKey, salt } =
       await fetchSrpParams(encryptedSrpParamsData)
@@ -514,6 +633,10 @@ export const handleLogin = async (username: string, password: string) => {
       encryptedServerPublicValueB.hmacBase64,
       helperSrpParamsAesKey
     )
+
+    const B_bytes = forge.util.hexToBytes(serverPublicValueB)
+    console.log('[FE after fetch SRP] B (bytes):', forge.util.bytesToHex(B_bytes))
+
     console.log('Fetched successfully!...') //TODO delete console logs !!!
     console.log('Received salt (s):', salt) //TODO delete console logs !!!
     console.log('Received serverPublicValueB (B):', serverPublicValueB) //TODO delete console logs !!!
@@ -535,8 +658,8 @@ export const handleLogin = async (username: string, password: string) => {
       scramblingParameterU
     )
     const sessionKeyK = computeK(sharedSecretS)
-    const clientProofM = computeM(
-      username,
+    const clientProofM = computeM1(
+      derivedUsername,
       salt,
       clientPublicValueA,
       BigInt(`0x${serverPublicValueB}`),
