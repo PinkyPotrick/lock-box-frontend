@@ -10,12 +10,25 @@
 </template>
 
 <script lang="ts">
-import { defineComponent } from 'vue'
+import { defineComponent, onMounted, ref } from 'vue'
 import SidePanel from '@/layouts/SidePanel.vue'
+import { useAuthStore } from '@/stores/auth'
 
 export default defineComponent({
   components: {
     SidePanel
+  },
+  setup() {
+    const authStore = useAuthStore()
+    const isLoggedIn = ref(false)
+
+    onMounted(() => {
+      isLoggedIn.value = authStore.isLoggedIn
+    })
+
+    return {
+      isLoggedIn
+    }
   }
 })
 </script>
@@ -23,7 +36,7 @@ export default defineComponent({
 <style scoped>
 .layout-wrapper {
   display: flex;
-  height: 90vh;
+  height: 92vh;
 }
 
 .layout-main-container {

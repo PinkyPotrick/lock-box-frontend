@@ -1,8 +1,7 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <template>
   <div class="header">
-    <!-- <p>logged in??? {{ isLoggedIn() }}</p> -->
-    <div class="darmkode-container" v-if="isLoggedIn()">
+    <div class="darmkode-container" v-if="isLoggedIn">
       <p-toggle-button
         class="darkmode-button"
         v-model="checked"
@@ -17,8 +16,8 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref } from 'vue'
-import { isLoggedIn } from '@/utils/auth'
+import { computed, defineComponent, ref } from 'vue'
+import { useAuthStore } from '@/stores/auth'
 
 export default defineComponent({
   setup() {
@@ -33,9 +32,12 @@ export default defineComponent({
       element?.classList.toggle('lock-box-dark')
     }
 
+    const authStore = useAuthStore()
+    const isLoggedIn = computed(() => authStore.isLoggedIn)
+
     return {
       checked,
-      isLoggedIn,
+      isLoggedIn: isLoggedIn,
       toggleDarkMode
     }
   }

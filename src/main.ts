@@ -1,5 +1,6 @@
 import { createApp } from 'vue'
 import { initializeCookies } from './utils/cookies'
+import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
 import axios from 'axios'
@@ -34,10 +35,12 @@ import OverlayBadge from 'primevue/overlaybadge'
 import Chart from 'primevue/chart'
 import Toast from 'primevue/toast'
 import ToastService from 'primevue/toastservice'
+import ProgressSpinner from 'primevue/progressspinner'
 // import { definePreset } from '@primevue/themes'
 import './assets/main.css'
 import 'primeicons/primeicons.css'
 
+const pinia = createPinia()
 const app = createApp(App)
 
 // const LockBoxColors = definePreset(Lara, {
@@ -95,6 +98,7 @@ app.use(PrimeVue, {
 app.use(VueCookies)
 app.use(ToastService)
 app.use(router)
+app.use(pinia)
 
 // Initialize the cookie utility
 initializeCookies(app)
@@ -127,5 +131,6 @@ app
   .component('p-overlay-badge', OverlayBadge)
   .component('p-chart', Chart)
   .component('p-toast', Toast)
+  .component('p-progress-spinner', ProgressSpinner)
 
 app.mount('#app')

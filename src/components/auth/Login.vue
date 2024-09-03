@@ -18,7 +18,8 @@
         <p-password id="password-login" v-model="password" fluid :feedback="false"></p-password>
       </div>
 
-      <p-button class="login-btn" label="Login" @click="handleLogin()"></p-button>
+      <p-button class="login-btn" label="Login" :loading="loading" @click="handleLogin()">
+      </p-button>
 
       <p>Don't have an account? <router-link to="/register">Register here</router-link></p>
     </div>
@@ -37,28 +38,31 @@ export default defineComponent({
     const password = ref('')
     const router = useRouter()
     const toast = useToast()
+    const loading = ref(false)
 
     const login = async () => {
-      try {
-        // Handle the login process
-        await handleLogin(username.value, password.value)
+      loading.value = true
+      // Introduce a slight delay to ensure instant rendering of the loader
+      setTimeout(async () => {
+        try {
+          // Handle the login process
+          await handleLogin(username.value, password.value)
 
-        // start testing
-        // const token = '8EpvcdpegqtFRTTRdg8JhMEZH1oSpIDc7zoB7WYIlfgh5MbdBKcaEPMZ21CWAyr2'
-        // cookies.set('auth_token', token, '60s')
-        // end testing
-
-        // Redirect to the dashboard on successful login
-        router.push({ name: 'Overview' })
-      } catch (error) {
-        toast.add({ severity: 'error', summary: 'Login failed', detail: error, life: 5000 })
-        console.error('Login failed:', error)
-      }
+          // Redirect to the dashboard on successful login
+          router.push({ name: 'Overview' })
+        } catch (error) {
+          toast.add({ severity: 'error', summary: 'Login failed', detail: error, life: 5000 })
+          console.error('Login failed:', error)
+        } finally {
+          loading.value = false
+        }
+      }, 10)
     }
 
     return {
       username,
       password,
+      loading,
       handleLogin: login
     }
   }

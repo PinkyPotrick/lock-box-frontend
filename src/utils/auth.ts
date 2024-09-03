@@ -1,4 +1,5 @@
 /* eslint-disable vue/multi-word-component-names */
+import { useAuthStore } from '@/stores/auth'
 import { getCookies } from './cookies'
 import {
   encryptWithPublicKey,
@@ -9,7 +10,8 @@ import {
   generateAndStoreSecureClientKeyPair,
   deriveEncryptionKey,
   encryptUsername,
-  decryptWithPrivateKey
+  decryptWithPrivateKey,
+  storeNewSecureClientKeyPair
 } from './encryption'
 import axios from '@/axios-config'
 import forge from 'node-forge'
@@ -432,6 +434,8 @@ export const handleRegister = async (username: string, email: string, password: 
     // Store the session token securely
     const cookies = getCookies()
     cookies.set('auth_token', sessionToken, '5min', '', '', true, 'Strict')
+    const authStore = useAuthStore()
+    authStore.updateAuthToken()
   } catch (error) {
     console.error('Registration failed:', error)
     throw error
@@ -457,13 +461,6 @@ export const handleLogin = async (username: string, password: string) => {
       hmac: hmacA
     } = encryptWithAESCBC(padHex(clientPublicValueA), aesKey)
 
-    // Encrypt the client's private value A using the AES key
-    const {
-      encryptedData: encryptedAESa,
-      iv: iva,
-      hmac: hmaca
-    } = encryptWithAESCBC(padHex(clientPrivateValueA), aesKey)
-
     // Encrypt the client's public key using the AES key
     const {
       encryptedData: encryptedAESClientPublicKey,
@@ -483,11 +480,6 @@ export const handleLogin = async (username: string, password: string) => {
         encryptedDataBase64: encryptedAESA,
         ivBase64: ivA,
         hmacBase64: hmacA
-      },
-      encryptedClientPrivateValueA: {
-        encryptedDataBase64: encryptedAESa,
-        ivBase64: iva,
-        hmacBase64: hmaca
       },
       encryptedClientPublicKey: {
         encryptedDataBase64: encryptedAESClientPublicKey,
@@ -536,26 +528,46 @@ export const handleLogin = async (username: string, password: string) => {
     const encryptedData = {
       encryptedClientProofM1: encryptedClientProofM1
     }
-    const { encryptedServerProofM2, encryptedSessionToken, helperAuthenticateAesKey } =
-      await authenticateUser(encryptedData)
+    const {
+      encryptedServerProofM2,
+      encryptedSessionToken,
+      encryptedUserPublicKey,
+      encryptedUserPrivateKey,
+      helperAuthenticateAesKey
+    } = await authenticateUser(encryptedData)
 
-    // Decrypt the retrieved session token and server proof
+    // Decrypt the retrieved session token, user's public key, user's private key and server proof
     const sessionToken = decryptWithAESCBC(
       encryptedSessionToken.encryptedDataBase64,
       encryptedSessionToken.ivBase64,
       encryptedSessionToken.hmacBase64,
       helperAuthenticateAesKey
     )
-
+    const userPublicKey = decryptWithAESCBC(
+      encryptedUserPublicKey.encryptedDataBase64,
+      encryptedUserPublicKey.ivBase64,
+      encryptedUserPublicKey.hmacBase64,
+      helperAuthenticateAesKey
+    )
+    const userPrivateKey = decryptWithAESCBC(
+      encryptedUserPrivateKey.encryptedDataBase64,
+      encryptedUserPrivateKey.ivBase64,
+      encryptedUserPrivateKey.hmacBase64,
+      helperAuthenticateAesKey
+    )
     const serverProofM2 = decryptWithPrivateKey(encryptedServerProofM2, clientPrivateKeyPem)
+
     const clientProofM2 = computeM2(clientPublicValueA, clientProofM1, sessionKeyK)
 
     if (clientProofM2 !== serverProofM2) {
       throw new Error('Proof verification failed. Authorization aborted!')
     }
 
+    storeNewSecureClientKeyPair(username, password, userPublicKey, userPrivateKey)
     const cookies = getCookies()
     cookies.set('auth_token', sessionToken, '5min', '', '', true, 'Strict')
+    const authStore = useAuthStore()
+    authStore.updateAuthToken()
   } catch (error) {
     console.error('Login failed:', error)
     throw error

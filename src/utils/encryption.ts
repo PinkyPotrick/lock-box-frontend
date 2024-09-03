@@ -1,6 +1,21 @@
 import forge from 'node-forge'
 
-export function storeSecureClientKeyPair(username: string, password: string) {} // TODO implement this!!!
+// Store a new secure client key pair
+export function storeNewSecureClientKeyPair(
+  username: string,
+  password: string,
+  publicKeyPem: string,
+  privateKeyPem: string
+) {
+  // Store the public key directly in localStorage
+  localStorage.setItem('clientPublicKey', publicKeyPem)
+
+  // Encrypt and store the private key
+  const { encryptedKey, salt, iv } = encryptPrivateKey(privateKeyPem, username, password)
+  localStorage.setItem('encryptedPrivateKey', encryptedKey)
+  localStorage.setItem('encryptionSalt', salt)
+  localStorage.setItem('encryptionIv', iv)
+}
 
 // Generate and store secure client key pair
 export function generateAndStoreSecureClientKeyPair(username: string, password: string) {

@@ -42,6 +42,7 @@ import { defineComponent, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from '@/axios-config'
 import { getCookies } from '@/utils/cookies'
+import { useAuthStore } from '@/stores/auth'
 
 export default defineComponent({
   setup() {
@@ -61,6 +62,8 @@ export default defineComponent({
       const cookies = getCookies()
       cookies?.remove('auth_token')
       router.push({ name: 'Login' })
+      const authStore = useAuthStore()
+      authStore.clearAuthToken()
     }
 
     onMounted(() => {
@@ -79,6 +82,7 @@ export default defineComponent({
 .side-panel {
   width: 300px;
   border-radius: 1rem;
+  margin-bottom: 1rem;
   padding: 1rem;
   display: flex;
   flex-direction: column;

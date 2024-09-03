@@ -41,7 +41,12 @@
         ></p-password>
       </div>
 
-      <p-button class="register-btn" label="Register" @click="handleRegister()"></p-button>
+      <p-button
+        class="register-btn"
+        label="Register"
+        :loading="loading"
+        @click="handleRegister()"
+      ></p-button>
 
       <p>Already have an account? <router-link to="/login">Login here</router-link></p>
     </div>
@@ -62,8 +67,10 @@ export default defineComponent({
     const confirmPassword = ref('')
     const router = useRouter()
     const toast = useToast()
+    const loading = ref(false)
 
     const register = async () => {
+      loading.value = true
       if (password.value !== confirmPassword.value) {
         toast.add({
           severity: 'warn',
@@ -73,21 +80,24 @@ export default defineComponent({
         })
         return
       }
-      try {
-        // Handle the registration process
-        await handleRegister(username.value, email.value, password.value)
+      // Introduce a slight delay to ensure instant rendering of the loader
+      setTimeout(async () => {
+        try {
+          // Handle the registration process
+          await handleRegister(username.value, email.value, password.value)
 
-        // start testing
-        // const token = '8EpvcdpegqtFRTTRdg8JhMEZH1oSpIDc7zoB7WYIlfgh5MbdBKcaEPMZ21CWAyr2'
-        // cookies.set('auth_token', token, '30s')
-        // end testing
-
-        // Redirect to the dashboard on successful registration
-        router.push({ name: 'Overview' })
-      } catch (error) {
-        toast.add({ severity: 'error', summary: 'Registration failed', detail: error, life: 5000 })
-        console.error('Registration failed:', error)
-      }
+          // Redirect to the dashboard on successful registration
+          router.push({ name: 'Overview' })
+        } catch (error) {
+          toast.add({
+            severity: 'error',
+            summary: 'Registration failed',
+            detail: error,
+            life: 5000
+          })
+          console.error('Registration failed:', error)
+        }
+      }, 10)
     }
 
     return {
@@ -95,12 +105,11 @@ export default defineComponent({
       email,
       password,
       confirmPassword,
+      loading,
       handleRegister: register
     }
   }
 })
 </script>
 
-<style scoped>
-/* Add styles for the registration form here */
-</style>
+<style scoped></style>
