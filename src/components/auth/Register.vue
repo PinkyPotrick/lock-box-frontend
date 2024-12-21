@@ -56,8 +56,8 @@
 <script lang="ts">
 import { defineComponent, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { handleRegister } from '@/utils/auth'
 import { useToast } from 'primevue/usetoast'
+import { handleRegister } from '@/services/authService'
 
 export default defineComponent({
   setup() {

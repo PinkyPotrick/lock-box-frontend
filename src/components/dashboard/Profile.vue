@@ -27,6 +27,7 @@ import { defineComponent, ref, onMounted } from 'vue'
 import type { User } from '@/models/user'
 import axios from '@/axios-config'
 import moment from 'moment'
+import { getCookies } from '@/utils/cookiesUtils'
 
 export default defineComponent({
   setup() {
@@ -36,10 +37,20 @@ export default defineComponent({
       createdAt: ''
     })
 
+    // Fetch and decrypt user profile data
     const fetchUserProfile = async () => {
       try {
-        const response = await axios.get<User>('/api/user/profile')
+        const cookies = getCookies()
+        const response = await axios.get(`/api/users/profile`, {
+          headers: {
+            Authorization: `Bearer ${cookies.get('auth_token')}`
+          }
+        })
+        console.log(response) // TODO delete this console.log !!!
+
         user.value = response.data
+        // const decryptedData = decrypt(response.data)
+        // user.value = JSON.parse(decryptedData)
       } catch (error) {
         console.error('Failed to fetch user profile:', error)
       }

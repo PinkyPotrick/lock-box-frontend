@@ -29,8 +29,8 @@
 <script lang="ts">
 import { defineComponent, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { handleLogin } from '@/utils/auth'
 import { useToast } from 'primevue/usetoast'
+import { handleLogin } from '@/services/authService'
 
 export default defineComponent({
   setup() {

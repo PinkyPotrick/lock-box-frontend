@@ -1,5 +1,5 @@
 import { createApp } from 'vue'
-import { initializeCookies } from './utils/cookies'
+import { initializeCookies } from './utils/cookiesUtils'
 import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'

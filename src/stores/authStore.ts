@@ -1,4 +1,4 @@
-import { getAuthToken } from '@/utils/auth'
+import { getAuthToken } from '@/utils/authUtils'
 import { defineStore } from 'pinia'
 
 export const useAuthStore = defineStore('auth', {

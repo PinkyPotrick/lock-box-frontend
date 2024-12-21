@@ -12,7 +12,7 @@
 <script lang="ts">
 import { defineComponent, onMounted, ref } from 'vue'
 import SidePanel from '@/layouts/SidePanel.vue'
-import { useAuthStore } from '@/stores/auth'
+import { useAuthStore } from '@/stores/authStore'
 
 export default defineComponent({
   components: {

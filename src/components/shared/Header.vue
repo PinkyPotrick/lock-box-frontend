@@ -17,7 +17,7 @@
 
 <script lang="ts">
 import { computed, defineComponent, ref } from 'vue'
-import { useAuthStore } from '@/stores/auth'
+import { useAuthStore } from '@/stores/authStore'
 
 export default defineComponent({
   setup() {

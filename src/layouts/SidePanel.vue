@@ -41,8 +41,8 @@
 import { defineComponent, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from '@/axios-config'
-import { getCookies } from '@/utils/cookies'
-import { useAuthStore } from '@/stores/auth'
+import { getCookies } from '@/utils/cookiesUtils'
+import { useAuthStore } from '@/stores/authStore'
 
 export default defineComponent({
   setup() {
