@@ -85,6 +85,7 @@ export default defineComponent({
         try {
           // Handle the registration process
           await handleRegister(username.value, email.value, password.value)
+          loading.value = false
 
           // Redirect to the dashboard on successful registration
           router.push({ name: 'Overview' })
@@ -96,6 +97,7 @@ export default defineComponent({
             life: 5000
           })
           console.error('Registration failed:', error)
+          loading.value = false
         }
       }, 10)
     }
