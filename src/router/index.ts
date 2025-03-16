@@ -12,7 +12,7 @@ import MainLayout from '@/layouts/MainLayout.vue'
 const routes: Array<RouteRecordRaw> = [
   {
     path: '/',
-    redirect: '/'
+    redirect: '/overview'
   },
   {
     path: '/login',
