@@ -10,24 +10,52 @@
     <div class="credentials">
       <div class="input-field">
         <label class="required" for="username-register">Username</label>
-        <p-input-text id="username-register" type="text" v-model="username" />
+        <p-input-text
+          id="username-register"
+          type="text"
+          v-model="username"
+          :class="{'p-invalid': submitted && !username}"
+          required
+        />
+        <small v-if="submitted && !username" class="p-error">Username is required.</small>
       </div>
 
       <div class="input-field">
         <label class="required" for="email-register">Email</label>
-        <p-input-text id="email-register" type="email" v-model="email" />
+        <p-input-text
+          id="email-register"
+          type="email"
+          v-model="email"
+          :class="{'p-invalid': submitted && !email}"
+          required
+        />
+        <small v-if="submitted && !email" class="p-error">Email is required.</small>
       </div>
 
-      <div class="input-field">
+      <div class="input-field password-wrapper">
         <label class="required" for="password-register">Password</label>
         <p-password
           id="password-register"
           v-model="password"
+          :class="{'p-invalid': submitted && !password}"
+          :feedback="false"
           :toggleMask="true"
           fluid
-          :feedback="false"
-        >
-        </p-password>
+          required
+          appendTo="self"
+        ></p-password>
+        <small v-if="submitted && !password" class="p-error">Password is required.</small>
+
+        <div class="password-errors-container" v-if="passwordErrors.length">
+          <small
+            v-for="(error, index) in passwordErrors"
+            :key="index"
+            class="p-error"
+            style="display: block;"
+          >
+            {{ error }}
+          </small>
+        </div>
       </div>
 
       <div class="input-field">
@@ -35,10 +63,14 @@
         <p-password
           id="password-confirmation-register"
           v-model="confirmPassword"
+          :class="{'p-invalid': submitted && !confirmPassword}"
           :toggleMask="true"
           fluid
           :feedback="false"
+          required
         ></p-password>
+        <small v-if="submitted && !confirmPassword" class="p-error">Confirm password is required.</small>
+        <small v-else-if="mismatchError" class="p-error">{{ mismatchError }}</small>
       </div>
 
       <p-button
@@ -48,16 +80,20 @@
         @click="handleRegister()"
       ></p-button>
 
-      <p>Already have an account? <router-link to="/login">Login here</router-link></p>
+      <p>
+        Already have an account?
+        <router-link to="/login">Login here</router-link>
+      </p>
     </div>
   </div>
 </template>
 
 <script lang="ts">
-import { defineComponent, ref } from 'vue'
+import { defineComponent, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
 import { handleRegister } from '@/services/authService'
+import { TOAST_LIFE_WARNING, TOAST_LIFE_ERROR } from '@/constants/appConstants'
 
 export default defineComponent({
   setup() {
@@ -65,36 +101,89 @@ export default defineComponent({
     const email = ref('')
     const password = ref('')
     const confirmPassword = ref('')
+    const mismatchError = ref('')
+    const passwordErrors = ref<string[]>([])
     const router = useRouter()
     const toast = useToast()
     const loading = ref(false)
+    const submitted = ref(false)
+
+    // Watch for mismatched passwords
+    watch([password, confirmPassword], () => {
+      mismatchError.value =
+        password.value && confirmPassword.value && password.value !== confirmPassword.value
+          ? 'Passwords do not match'
+          : ''
+    })
+
+    // Watch password to store (and display) validation errors in real time
+    watch(password, () => {
+      const errors: string[] = []
+      if (password.value.length > 0) {
+        if (password.value.length < 8) {
+          errors.push('Must be at least 8 characters.')
+        }
+        if (!/[A-Z]/.test(password.value)) {
+          errors.push('Must contain an uppercase letter.')
+        }
+        if (!/\d/.test(password.value)) {
+          errors.push('Must contain a number.')
+        }
+      }
+      passwordErrors.value = errors
+    })
 
     const register = async () => {
-      loading.value = true
-      if (password.value !== confirmPassword.value) {
+      submitted.value = true
+
+      // Basic check for required fields
+      if (!username.value || !email.value || !password.value || !confirmPassword.value) {
         toast.add({
           severity: 'warn',
-          summary: 'Passwords mismatch',
-          detail: 'The confirmed password needs to match the password',
-          life: 5000
+          summary: 'Required fields missing',
+          detail: 'Please fill in all required fields',
+          life: TOAST_LIFE_WARNING
         })
         return
       }
+
+      // If still mismatched, return
+      if (mismatchError.value) {
+        toast.add({
+          severity: 'warn',
+          summary: 'Passwords mismatch',
+          detail: mismatchError.value,
+          life: TOAST_LIFE_ERROR
+        })
+        return
+      }
+
+      // If we have password-specific validation errors
+      if (passwordErrors.value.length) {
+        toast.add({
+          severity: 'warn',
+          summary: 'Weak or invalid password',
+          detail: 'Please adjust your password according to the rules',
+          life: TOAST_LIFE_ERROR
+        })
+        return
+      }
+
+      loading.value = true
       // Introduce a slight delay to ensure instant rendering of the loader
       setTimeout(async () => {
         try {
           // Handle the registration process
           await handleRegister(username.value, email.value, password.value)
           loading.value = false
-
           // Redirect to the dashboard on successful registration
           router.push({ name: 'Overview' })
         } catch (error) {
           toast.add({
             severity: 'error',
             summary: 'Registration failed',
-            detail: error,
-            life: 5000
+            detail: error as string,
+            life: TOAST_LIFE_ERROR
           })
           console.error('Registration failed:', error)
           loading.value = false
@@ -107,7 +196,10 @@ export default defineComponent({
       email,
       password,
       confirmPassword,
+      mismatchError,
+      passwordErrors,
       loading,
+      submitted,
       handleRegister: register
     }
   }

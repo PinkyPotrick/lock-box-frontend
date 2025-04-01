@@ -1,0 +1,2 @@
+export const TOAST_LIFE_WARNING = 4000
+export const TOAST_LIFE_ERROR = 5000

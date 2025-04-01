@@ -57,6 +57,12 @@
   align-items: center;
   justify-content: center;
   flex-direction: column;
+
+  .password-errors-container {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 
 .title {
@@ -86,6 +92,12 @@
 
   .p-textarea {
     width: 100%;
+  }
+
+  .p-error {
+    color: red;
+    font-size: 0.8rem;
+    margin: 0.5rem 0.2rem 0 0.2rem;
   }
 }
 
