@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 const axiosInstance = axios.create({
-  baseURL: 'http://localhost:8080',
+  baseURL: '/api',
   withCredentials: true, // Ensure cookies are sent with requests if needed for authentication
   timeout: 10000
 })

@@ -14,7 +14,7 @@
           id="username-login"
           type="text"
           v-model="username"
-          :class="{'p-invalid': submitted && !username}"
+          :class="{ 'p-invalid': submitted && !username }"
         />
         <small v-if="submitted && !username" class="p-error">Username is required.</small>
       </div>
@@ -26,7 +26,7 @@
           v-model="password"
           fluid
           :feedback="false"
-          :class="{'p-invalid': submitted && !password}"
+          :class="{ 'p-invalid': submitted && !password }"
         ></p-password>
         <small v-if="submitted && !password" class="p-error">Password is required.</small>
       </div>
@@ -49,30 +49,24 @@
 <script lang="ts">
 import { defineComponent, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useToast } from 'primevue/usetoast'
 import { handleLogin } from '@/services/authService'
-import { TOAST_LIFE_WARNING, TOAST_LIFE_ERROR } from '@/constants/appConstants'
+import { useToastService } from '@/services/toastService'
 
 export default defineComponent({
   setup() {
     const username = ref('')
     const password = ref('')
     const router = useRouter()
-    const toast = useToast()
     const loading = ref(false)
     const submitted = ref(false)
+    const { handleError, handleWarning } = useToastService()
 
     const login = async () => {
       submitted.value = true
 
       // Basic check for required fields
       if (!username.value || !password.value) {
-        toast.add({
-          severity: 'warn',
-          summary: 'Required fields missing',
-          detail: 'Please enter your username and password',
-          life: TOAST_LIFE_WARNING
-        })
+        handleWarning('Please enter your username and password', 'Required fields missing')
         return
       }
 
@@ -86,13 +80,7 @@ export default defineComponent({
           // Redirect to the dashboard on successful login
           router.push({ name: 'Overview' })
         } catch (error) {
-          toast.add({
-            severity: 'error',
-            summary: 'Login failed',
-            detail: error,
-            life: TOAST_LIFE_ERROR
-          })
-          console.error('Login failed:', error)
+          handleError(error, 'Login failed')
         } finally {
           loading.value = false
         }
