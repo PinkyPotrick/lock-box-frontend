@@ -1,5 +1,4 @@
 /* eslint-disable vue/multi-word-component-names */
-import { getCookies } from './cookiesUtils'
 import { modExp } from './mathOperationsUtils'
 import forge from 'node-forge'
 
@@ -247,15 +246,4 @@ export function computeM2(A: bigint, M1: string, K: string): string {
 
   // Return M2 as a hex string
   return sha256.digest().toHex()
-}
-
-// _______________________________________________ ABOVE WE HAVE HELPER FUNCTIONS _______________________________________________
-
-export const getAuthToken = (): string | null => {
-  const cookies = getCookies()
-  return cookies?.get('auth_token')
-}
-
-export const isLoggedIn = (): boolean => {
-  return !!getAuthToken()
 }

@@ -6,11 +6,14 @@
       <template #header>
         <div class="profile-header">
           <i class="pi pi-user profile-icon"></i>
-          <span class="profile-title">{{ user.username }}</span>
         </div>
       </template>
       <template #content>
-        <div class="profile-content">
+        <div class="profile-content" v-if="loading">
+          <p-progress-spinner style="width: 50px" strokeWidth="4" />
+          <span class="loading-text">Loading profile data...</span>
+        </div>
+        <div class="profile-content" v-else>
           <div class="profile-field"><strong>Username:</strong> {{ user.username }}</div>
           <div class="profile-field"><strong>Email:</strong> {{ user.email }}</div>
           <div class="profile-field">
@@ -25,39 +28,43 @@
 <script lang="ts">
 import { defineComponent, ref, onMounted } from 'vue'
 import type { User } from '@/models/user'
-import axios from '@/axios-config'
 import moment from 'moment'
-import { getCookies } from '@/utils/cookiesUtils'
+import { useAuthStore } from '@/stores/authStore'
+import { ProfileService } from '@/services/profileService'
 
 export default defineComponent({
   setup() {
+    const loading = ref(true)
+    const authStore = useAuthStore()
+
+    // Initialize user with data from authStore
     const user = ref<User>({
-      username: '',
+      username: authStore.user?.username || '',
       email: '',
       createdAt: ''
     })
 
-    // Fetch and decrypt user profile data
     const fetchUserProfile = async () => {
       try {
-        const cookies = getCookies()
-        const response = await axios.get(`/api/users/profile`, {
-          headers: {
-            Authorization: `Bearer ${cookies.get('auth_token')}`
-          }
-        })
-        console.log(response) // TODO delete this console.log !!!
+        loading.value = true
+        const profileData = await ProfileService.fetchUserProfile()
 
-        user.value = response.data
-        // const decryptedData = decrypt(response.data)
-        // user.value = JSON.parse(decryptedData)
+        // Update the user with the fetched data
+        user.value = {
+          ...user.value,
+          ...profileData,
+          username: user.value.username
+        }
       } catch (error) {
         console.error('Failed to fetch user profile:', error)
+      } finally {
+        loading.value = false
       }
     }
 
     const formatDate = (dateString: string) => {
-      return moment(dateString).format('MMMM dd, yyyy')
+      if (!dateString) return 'N/A'
+      return moment(dateString).format('MMMM D, YYYY')
     }
 
     onMounted(() => {
@@ -66,6 +73,7 @@ export default defineComponent({
 
     return {
       user,
+      loading,
       formatDate
     }
   }
@@ -88,16 +96,18 @@ export default defineComponent({
   padding: 2rem;
 }
 
-.profile-title {
-  font-size: 1.5rem;
-  font-weight: bold;
+.profile-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
-.profile-content {
+.loading-text {
   margin-top: 1rem;
 }
 
 .profile-field {
   margin-bottom: 1rem;
+  width: 100%;
 }
 </style>

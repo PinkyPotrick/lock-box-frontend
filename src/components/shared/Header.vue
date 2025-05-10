@@ -1,6 +1,9 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <template>
   <div class="header">
+    <div class="title-container" v-if="isLoggedIn">
+      <h1 class="app-title">LockBox</h1>
+    </div>
     <div class="darmkode-container" v-if="isLoggedIn">
       <p-toggle-button
         class="darkmode-button"
@@ -37,7 +40,7 @@ export default defineComponent({
 
     return {
       checked,
-      isLoggedIn: isLoggedIn,
+      isLoggedIn,
       toggleDarkMode
     }
   }
@@ -45,11 +48,28 @@ export default defineComponent({
 </script>
 
 <style>
-.darmkode-container {
+.header {
   display: flex;
   flex-direction: row;
-  justify-content: flex-start;
   align-items: center;
+  position: relative;
+  padding: 10px;
+}
+
+.title-container {
+  position: absolute;
+  left: 0;
+  right: 0;
+  text-align: center;
+  height: auto;
+}
+
+.app-title {
+  font-size: 1.5rem;
+}
+
+.darmkode-container {
+  margin-right: auto;
 }
 
 .pi {

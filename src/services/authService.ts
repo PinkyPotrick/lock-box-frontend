@@ -1,17 +1,15 @@
 import { useAuthStore } from '@/stores/authStore'
-import { bigIntFromBytes, padHex } from '@/utils/dataTypesUtils'
+import { bigIntFromBytes } from '@/utils/dataTypesUtils'
 import { getCookies } from '@/utils/cookiesUtils'
+import { AUTH } from '@/constants/appConstants'
+import { API_PATHS } from '@/constants/apiPaths'
 import {
-  encryptWithPublicKey,
   generateAESKey,
-  encryptWithAESCBC,
   getClientKeyPair,
-  decryptWithAESCBC,
   generateAndStoreSecureClientKeyPair,
+  storeNewSecureClientKeyPair,
   deriveEncryptionKey,
-  encryptUsername,
-  decryptWithPrivateKey,
-  storeNewSecureClientKeyPair
+  encryptUsername
 } from '@/utils/encryptionUtils'
 import {
   computeA,
@@ -25,26 +23,34 @@ import {
   generateSalt,
   N
 } from '@/utils/authUtils'
+import { RegistrationEncryptionService } from './encryption/registrationEncryptionService'
+import { LoginEncryptionService } from './encryption/loginEncryptionService'
 import axios from '@/axios-config'
 import forge from 'node-forge'
 
 /**
- * Fetches the server's public key
- * @returns the public key string
+ * Prepares user credentials for secure authentication
+ * @param username User's username
+ * @param password User's password
+ * @returns Derived key and encrypted username
  */
-const fetchPublicKey = async (): Promise<string> => {
-  const response = await axios.get('/api/auth/public-key')
-  return response?.data?.item
+const prepareUserCredentials = (username: string, password: string) => {
+  const derivedKey = deriveEncryptionKey(username, password)
+  const derivedUsername = encryptUsername(username, derivedKey)
+
+  return {
+    derivedKey,
+    derivedUsername
+  }
 }
 
 /**
  * Registers the user and fetches a valid session token
- * @param data - the encrypted { derivedKey, username, email, salt, encryptedVerifier,
- *               encryptedClientPublicKey, encryptedClientPrivateKey }
+ * @param data - the encrypted registration data
  * @returns encrypted AES session token { encryptedSessionToken, helperAesKey }
  */
 const registerUser = async (data: object) => {
-  const response = await axios.post('/api/auth/register', data)
+  const response = await axios.post(API_PATHS.AUTH.REGISTER, data)
   return response?.data?.item
 }
 
@@ -56,7 +62,7 @@ const registerUser = async (data: object) => {
  *          encryptedServerPublicValueB, helperAesKey }
  */
 const fetchSrpParams = async (data: object) => {
-  const response = await axios.post('/api/auth/srp-params', data)
+  const response = await axios.post(API_PATHS.AUTH.SRP_PARAMS, data)
   return response?.data?.item
 }
 
@@ -66,7 +72,16 @@ const fetchSrpParams = async (data: object) => {
  * @returns encrypted AES server proof and session token { encryptedM2, encryptedSessionToken, helperAesKey }
  */
 const authenticateUser = async (data: object) => {
-  const response = await axios.post('/api/auth/srp-authenticate', data)
+  const response = await axios.post(API_PATHS.AUTH.SRP_AUTHENTICATE, data)
+  return response?.data?.item
+}
+
+/**
+ * Sends a logout request to the server
+ * @returns success message from server
+ */
+const logoutUser = async () => {
+  const response = await axios.post(API_PATHS.AUTH.LOGOUT)
   return response?.data?.item
 }
 
@@ -78,76 +93,49 @@ const authenticateUser = async (data: object) => {
  */
 export const handleRegister = async (username: string, email: string, password: string) => {
   try {
+    // Generate and store client key pair
     generateAndStoreSecureClientKeyPair(username, password)
     const { publicKeyPem: clientPublicKeyPem, privateKeyPem: clientPrivateKeyPem } =
       await getClientKeyPair(username, password)
 
     // Encrypt the username using a derived key from the username and password
-    const derivedKey = deriveEncryptionKey(username, password)
-    const derivedUsername = encryptUsername(username, derivedKey)
+    const { derivedKey, derivedUsername } = prepareUserCredentials(username, password)
 
-    const salt = generateSalt() // Generate a random salt
-    const verifier = computeVerifier(salt, derivedUsername, password) // Compute the verifier using the derived username
-    const serverPublicKeyPem = await fetchPublicKey() // Fetch the server's public key
-    const aesKey = generateAESKey() // Generate an AES key
+    // Generate salt and compute verifier
+    const salt = generateSalt()
+    const verifier = computeVerifier(salt, derivedUsername, password)
 
-    // Encrypt the verifier using the AES key
-    const {
-      encryptedData: encryptedAESVerifier,
-      iv: ivVerifier,
-      hmac: hmacVerifier
-    } = encryptWithAESCBC(padHex(verifier), aesKey)
+    // Encrypt all registration data
+    const encryptedData = await RegistrationEncryptionService.encryptRegistrationData({
+      derivedKey,
+      derivedUsername,
+      email,
+      salt,
+      verifier,
+      clientPublicKeyPem,
+      clientPrivateKeyPem
+    })
 
-    // Encrypt the client's public key using the AES key
-    const {
-      encryptedData: encryptedAESClientPublicKey,
-      iv: ivClientPublicKey,
-      hmac: hmacClientPublicKey
-    } = encryptWithAESCBC(clientPublicKeyPem, aesKey)
-
-    // Encrypt the client's private key using the AES key
-    const {
-      encryptedData: encryptedAESClientPrivateKey,
-      iv: ivClientPrivateKey,
-      hmac: hmacClientPrivateKey
-    } = encryptWithAESCBC(clientPrivateKeyPem, aesKey)
-
-    // Prepare the encrypted data to be sent to the server for registration
-    const encryptedData = {
-      derivedKey: encryptWithPublicKey(derivedKey, serverPublicKeyPem),
-      encryptedDerivedUsername: encryptWithPublicKey(derivedUsername, serverPublicKeyPem),
-      encryptedEmail: encryptWithPublicKey(email, serverPublicKeyPem),
-      encryptedSalt: encryptWithPublicKey(salt, serverPublicKeyPem),
-      encryptedClientVerifier: {
-        encryptedDataBase64: encryptedAESVerifier,
-        ivBase64: ivVerifier,
-        hmacBase64: hmacVerifier
-      },
-      encryptedClientPublicKey: {
-        encryptedDataBase64: encryptedAESClientPublicKey,
-        ivBase64: ivClientPublicKey,
-        hmacBase64: hmacClientPublicKey
-      },
-      encryptedClientPrivateKey: {
-        encryptedDataBase64: encryptedAESClientPrivateKey,
-        ivBase64: ivClientPrivateKey,
-        hmacBase64: hmacClientPrivateKey
-      },
-      helperAesKey: aesKey // This value cannot be encrypted (it should be protected by SSL)
-    }
+    // Send registration request
     const { encryptedSessionToken, helperAesKey } = await registerUser(encryptedData)
 
     // Decrypt the retrieved session token
-    const sessionToken = decryptWithAESCBC(
-      encryptedSessionToken.encryptedDataBase64,
-      encryptedSessionToken.ivBase64,
-      encryptedSessionToken.hmacBase64,
+    const sessionToken = RegistrationEncryptionService.decryptSessionToken(
+      encryptedSessionToken,
       helperAesKey
     )
 
     // Store the session token securely
     const cookies = getCookies()
-    cookies.set('auth_token', sessionToken, '5min', '', '', true, 'Strict')
+    cookies.set(
+      AUTH.TOKEN_COOKIE_NAME,
+      sessionToken,
+      AUTH.TOKEN_EXPIRATION,
+      '',
+      '',
+      true,
+      AUTH.COOKIE_SAME_SITE
+    )
     const authStore = useAuthStore()
     authStore.updateAuthToken()
   } catch (error) {
@@ -159,57 +147,36 @@ export const handleRegister = async (username: string, email: string, password: 
 // Implements the SRP login process.
 export const handleLogin = async (username: string, password: string) => {
   try {
+    // Generate and store client key pair
     generateAndStoreSecureClientKeyPair(username, password)
     const { publicKeyPem: clientPublicKeyPem, privateKeyPem: clientPrivateKeyPem } =
       await getClientKeyPair(username, password)
 
+    // Generate SRP values
     const clientPrivateValueA = bigIntFromBytes(forge.random.getBytesSync(32)) // Generate a random client's private value a
     const clientPublicValueA = computeA(clientPrivateValueA) // Compute the client's public value A
-    const serverPublicKeyPem = await fetchPublicKey() // Fetch the server's public key
     const aesKey = generateAESKey() // Generate an AES key
 
-    // Encrypt the client's public value A using the AES key
-    const {
-      encryptedData: encryptedAESA,
-      iv: ivA,
-      hmac: hmacA
-    } = encryptWithAESCBC(padHex(clientPublicValueA), aesKey)
-
-    // Encrypt the client's public key using the AES key
-    const {
-      encryptedData: encryptedAESClientPublicKey,
-      iv: ivClientPublicKey,
-      hmac: hmacClientPublicKey
-    } = encryptWithAESCBC(clientPublicKeyPem, aesKey)
-
     // Encrypt the username using a derived key from the username and password
-    const derivedKey = deriveEncryptionKey(username, password)
-    const derivedUsername = encryptUsername(username, derivedKey)
+    const { derivedKey, derivedUsername } = prepareUserCredentials(username, password)
 
-    // Prepare the encrypted data to be sent to the server to receive the salt and server's public value B
-    const encryptedSrpParamsData = {
-      derivedKey: encryptWithPublicKey(derivedKey, serverPublicKeyPem),
-      encryptedDerivedUsername: encryptWithPublicKey(derivedUsername, serverPublicKeyPem),
-      encryptedClientPublicValueA: {
-        encryptedDataBase64: encryptedAESA,
-        ivBase64: ivA,
-        hmacBase64: hmacA
-      },
-      encryptedClientPublicKey: {
-        encryptedDataBase64: encryptedAESClientPublicKey,
-        ivBase64: ivClientPublicKey,
-        hmacBase64: hmacClientPublicKey
-      },
-      helperAesKey: aesKey // This value cannot be encrypted (it should be protected by SSL)
-    }
+    // Encrypt SRP parameters
+    const { serverPublicKeyPem, ...encryptedSrpParamsData } =
+      await LoginEncryptionService.encryptSrpParams({
+        clientPublicValueA,
+        clientPublicKeyPem,
+        derivedKey,
+        derivedUsername,
+        aesKey
+      })
+
+    // Fetch SRP parameters from server
     const { encryptedServerPublicValueB, helperSrpParamsAesKey, salt } =
       await fetchSrpParams(encryptedSrpParamsData)
 
-    // Decrypt the retrieved server's public value B
-    const serverPublicValueB = decryptWithAESCBC(
-      encryptedServerPublicValueB.encryptedDataBase64,
-      encryptedServerPublicValueB.ivBase64,
-      encryptedServerPublicValueB.hmacBase64,
+    // Decrypt the server's public value B
+    const serverPublicValueB = LoginEncryptionService.decryptServerPublicValueB(
+      encryptedServerPublicValueB,
       helperSrpParamsAesKey
     )
 
@@ -218,7 +185,7 @@ export const handleLogin = async (username: string, password: string) => {
       throw new Error('Authentication failed: Invalid server value B.')
     }
 
-    // derivedUsername is used because the backend uses the same 'derivedUsername' value
+    // Compute SRP proof values
     const privateValueX = computeX(salt, derivedUsername, password)
     const scramblingParameterU = computeU(BigInt(`0x${serverPublicValueB}`))
     const sharedSecretS = computeS(
@@ -236,55 +203,74 @@ export const handleLogin = async (username: string, password: string) => {
       sessionKeyK
     )
 
-    const encryptedClientProofM1 = encryptWithPublicKey(clientProofM1, serverPublicKeyPem)
-
-    // Prepare the encrypted data to be sent to the server to receive the salt and server's public value B
-    const encryptedData = {
-      encryptedClientProofM1: encryptedClientProofM1
-    }
-    const {
-      encryptedServerProofM2,
-      encryptedSessionToken,
-      encryptedUserPublicKey,
-      encryptedUserPrivateKey,
-      helperAuthenticateAesKey
-    } = await authenticateUser(encryptedData)
-
-    // Decrypt the retrieved session token, user's public key, user's private key and server proof
-    const sessionToken = decryptWithAESCBC(
-      encryptedSessionToken.encryptedDataBase64,
-      encryptedSessionToken.ivBase64,
-      encryptedSessionToken.hmacBase64,
-      helperAuthenticateAesKey
+    // Encrypt client proof
+    const encryptedData = LoginEncryptionService.encryptClientProof(
+      clientProofM1,
+      serverPublicKeyPem
     )
-    const userPublicKey = decryptWithAESCBC(
-      encryptedUserPublicKey.encryptedDataBase64,
-      encryptedUserPublicKey.ivBase64,
-      encryptedUserPublicKey.hmacBase64,
-      helperAuthenticateAesKey
-    )
-    const userPrivateKey = decryptWithAESCBC(
-      encryptedUserPrivateKey.encryptedDataBase64,
-      encryptedUserPrivateKey.ivBase64,
-      encryptedUserPrivateKey.hmacBase64,
-      helperAuthenticateAesKey
-    )
-    const serverProofM2 = decryptWithPrivateKey(encryptedServerProofM2, clientPrivateKeyPem)
 
+    // Authenticate with server
+    const authResponse = await authenticateUser(encryptedData)
+
+    // Decrypt authentication response
+    const { sessionToken, userPublicKey, userPrivateKey, serverProofM2 } =
+      LoginEncryptionService.decryptAuthenticationResponse(authResponse, clientPrivateKeyPem)
+
+    // Verify server proof
     const clientProofM2 = computeM2(clientPublicValueA, clientProofM1, sessionKeyK)
-
     if (clientProofM2 !== serverProofM2) {
       throw new Error('Proof verification failed. Authorization aborted!')
     }
 
-    // Store the session token securely
+    // Store session data
     storeNewSecureClientKeyPair(username, password, userPublicKey, userPrivateKey)
     const cookies = getCookies()
-    cookies.set('auth_token', sessionToken, '5min', '', '', true, 'Strict')
+    cookies.set(
+      AUTH.TOKEN_COOKIE_NAME,
+      sessionToken,
+      AUTH.TOKEN_EXPIRATION,
+      '',
+      '',
+      true,
+      AUTH.COOKIE_SAME_SITE
+    )
     const authStore = useAuthStore()
     authStore.updateAuthToken()
   } catch (error) {
     console.error('Login failed:', error)
+    throw error
+  }
+}
+
+/**
+ * Handles the logout process
+ * - Calls the backend logout endpoint
+ * - Clears the auth token
+ * - Updates the auth store
+ */
+export const handleLogout = async () => {
+  try {
+    const authStore = useAuthStore()
+    const token = authStore.authToken
+
+    if (token) {
+      // Call the backend logout endpoint
+      await logoutUser()
+
+      // Clear the auth token from cookies
+      const cookies = getCookies()
+      cookies.remove(AUTH.TOKEN_COOKIE_NAME)
+
+      // Update the auth store state
+      authStore.logout()
+
+      return true
+    } else {
+      console.warn('No active session to logout from')
+      return false
+    }
+  } catch (error) {
+    console.error('Logout failed:', error)
     throw error
   }
 }
