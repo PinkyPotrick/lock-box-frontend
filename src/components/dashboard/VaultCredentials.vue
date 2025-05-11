@@ -10,39 +10,26 @@
       <h2>{{ vaultName }} Credentials</h2>
     </div>
 
-    <div class="actions">
-      <p-button
-        label="Add Credential"
-        icon="pi pi-plus"
-        @click="openCreateCredentialDialog"
-      ></p-button>
-    </div>
+    <div class="actions-container">
+      <div class="actions">
+        <p-button
+          label="Add Credential"
+          icon="pi pi-plus"
+          @click="openCreateCredentialDialog"
+        ></p-button>
+      </div>
 
-    <p-data-table
-      class="data-table-container"
-      v-model:filters="filters"
-      :value="credentials"
-      :global-filter-fields="['domain', 'username', 'email', 'category']"
-      paginator
-      :rows="rows"
-      :rowsPerPageOptions="[5, 10, 20]"
-      :loading="loading"
-      :emptyMessage="'No credentials found in this vault'"
-      v-model:sortField="sortField"
-      v-model:sortOrder="sortOrder"
-      @sort="onSort"
-      @page="onRowsPerPageChange"
-    >
-      <template #header>
-        <div class="table-header">
-          <p-input-text
-            v-model="filters.global.value"
-            placeholder="Search credentials..."
-            class="search-input"
-          />
+      <div class="table-header">
+        <p-input-text
+          v-model="filters.global.value"
+          placeholder="Search credentials..."
+          class="search-input"
+          @input="onFilterChange"
+        />
+        <div class="filter-controls">
           <p-select
             v-model="categoryFilter"
-            :options="availableCategories"
+            :options="categoryOptions"
             placeholder="Filter by category"
             optionLabel="name"
             optionValue="value"
@@ -60,8 +47,26 @@
             v-tooltip.bottom="'Show favorites only'"
           />
         </div>
-      </template>
+      </div>
+    </div>
 
+    <p-data-table
+      class="data-table-container"
+      :value="filteredCredentials"
+      :paginator="true"
+      :rows="rows"
+      v-model:first="first"
+      :rowsPerPageOptions="[5, 10, 20, 50]"
+      :loading="loading"
+      :emptyMessage="loading ? 'Loading credentials...' : 'No credentials found in this vault'"
+      v-model:sortField="sortField"
+      v-model:sortOrder="sortOrder"
+      @sort="onSortChange"
+      @page="onPageChange"
+      paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink RowsPerPageDropdown CurrentPageReport"
+      :currentPageReportTemplate="'{first} to {last} of {totalRecords} credentials'"
+      dataKey="id"
+    >
       <p-column field="favorite" header="">
         <template #body="slotProps">
           <i
@@ -180,7 +185,7 @@
             @blur="v$.newCredential.username.$touch()"
           />
           <small
-            class="p-error"
+            class="form-error"
             v-if="v$.newCredential.username.$invalid && v$.newCredential.username.$dirty"
           >
             {{ v$.newCredential.username.$errors[0].$message }}
@@ -199,7 +204,7 @@
             @blur="v$.newCredential.email.$touch()"
           />
           <small
-            class="p-error"
+            class="form-error"
             v-if="v$.newCredential.email.$invalid && v$.newCredential.email.$dirty"
           >
             {{ v$.newCredential.email.$errors[0].$message }}
@@ -228,7 +233,7 @@
             />
           </div>
           <small
-            class="p-error"
+            class="form-error"
             v-if="v$.newCredential.password.$invalid && v$.newCredential.password.$dirty"
           >
             {{ v$.newCredential.password.$errors[0].$message }}
@@ -261,7 +266,7 @@
             @blur="v$.newCredential.notes.$touch()"
           />
           <small
-            class="p-error"
+            class="form-error"
             v-if="v$.newCredential.notes.$invalid && v$.newCredential.notes.$dirty"
           >
             {{ v$.newCredential.notes.$errors[0].$message }}
@@ -350,7 +355,7 @@
             @blur="v$.editCredential.username.$touch()"
           />
           <small
-            class="p-error"
+            class="form-error"
             v-if="v$.editCredential.username.$invalid && v$.editCredential.username.$dirty"
           >
             {{ v$.editCredential.username.$errors[0].$message }}
@@ -369,7 +374,7 @@
             @blur="v$.editCredential.email.$touch()"
           />
           <small
-            class="p-error"
+            class="form-error"
             v-if="v$.editCredential.email.$invalid && v$.editCredential.email.$dirty"
           >
             {{ v$.editCredential.email.$errors[0].$message }}
@@ -399,7 +404,7 @@
             />
           </div>
           <small
-            class="p-error"
+            class="form-error"
             v-if="v$.editCredential.password.$invalid && v$.editCredential.password.$dirty"
           >
             {{ v$.editCredential.password.$errors[0].$message }}
@@ -433,7 +438,7 @@
             @blur="v$.editCredential.notes.$touch()"
           />
           <small
-            class="p-error"
+            class="form-error"
             v-if="v$.editCredential.notes.$invalid && v$.editCredential.notes.$dirty"
           >
             {{ v$.editCredential.notes.$errors[0].$message }}
@@ -590,10 +595,10 @@ import { email, helpers, maxLength, required } from '@vuelidate/validators'
 import moment from 'moment'
 import Tooltip from 'primevue/tooltip'
 import { useConfirm } from 'primevue/useconfirm'
-import { computed, defineComponent, onMounted, reactive, ref, watch } from 'vue'
+import { computed, defineComponent, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-// Define our own filter match modes
+// Define filter match modes
 const FILTER_MATCH_MODES = {
   CONTAINS: 'contains',
   EQUALS: 'equals',
@@ -611,40 +616,44 @@ export default defineComponent({
     const confirm = useConfirm()
     const { handleError, handleSuccess, handleInfo } = useToastService()
 
+    // Core data
     const vaultId = ref(route.params.vaultId as string)
     const vaultName = ref('')
     const credentials = ref<Credential[]>([])
-    const allCredentials = ref<Credential[]>([])
+    const totalLoaded = ref(0)
+    const availableDomains = ref<Domain[]>([])
+
+    // UI state
     const loading = ref(false)
     const submitting = ref(false)
-
+    const initialLoadComplete = ref(false)
     const showCreateCredentialDialog = ref(false)
     const showEditCredentialDialog = ref(false)
     const showViewCredentialDialog = ref(false)
     const passwordVisible = ref(false)
-    const showFavoritesOnly = ref(false)
 
+    // Pagination
+    const first = ref(0)
+    const rows = ref(DEFAULTS.PAGE_SIZE)
+
+    // Sorting
     const sortField = ref('updatedAt')
     const sortOrder = ref(-1) // Descending
 
+    // Filtering
+    const showFavoritesOnly = ref(false)
     const categoryFilter = ref(null)
     const availableCategories = ref<{ name: string; value: string }[]>([])
-
-    // Search and filtering
     const filters = ref({
       global: { value: null, matchMode: FILTER_MATCH_MODES.CONTAINS }
     })
-
-    // Add a reactive reference for rows per page
-    const rows = ref(10)
 
     // Form validation
     const requiredMsg = 'This field is required'
     const emailValidator = helpers.withMessage('Please enter a valid email address', email)
     const maxLengthMsg = (max: number) => `Maximum ${max} characters allowed`
 
-    const availableDomains = ref<Domain[]>([])
-
+    // Form data
     const newCredential = reactive({
       username: '',
       email: '',
@@ -735,52 +744,76 @@ export default defineComponent({
       { name: 'Productivity', value: 'Productivity' },
       { name: 'Cloud Storage', value: 'Cloud Storage' },
       { name: 'Security', value: 'Security' },
-      { name: 'MYCATEGORY', value: 'MYCATEGORY' },
       { name: 'Other', value: 'Other' }
     ]
 
-    // Computed properties for form validation
+    // Computed properties
     const isFormValid = computed(() => {
-      return newCredential.username && newCredential.password && newCredential.domainId
+      return (
+        !v$.value.newCredential.$invalid &&
+        newCredential.username &&
+        newCredential.password &&
+        newCredential.domainId
+      )
     })
 
     const isEditFormValid = computed(() => {
-      return editCredential.username && editCredential.password && editCredential.domainId
+      return (
+        !v$.value.editCredential.$invalid &&
+        editCredential.username &&
+        editCredential.password &&
+        editCredential.domainId
+      )
     })
 
-    const fetchCredentials = async (page = 0) => {
-      loading.value = true
-      try {
-        const response = await CredentialService.getCredentials(
-          vaultId.value,
-          page,
-          rows.value, // Use the reactive rows value
-          sortField.value,
-          sortOrder.value === 1 ? 'asc' : 'desc'
+    // Filter credentials in the front-end
+    const filteredCredentials = computed(() => {
+      if (credentials.value.length === 0) {
+        return []
+      }
+
+      let result = [...credentials.value]
+
+      // Apply global search filter
+      const globalFilterValue = filters.value.global.value
+      if (globalFilterValue) {
+        const search = String(globalFilterValue).toLowerCase()
+        result = result.filter(
+          (cred) =>
+            cred.username?.toLowerCase().includes(search) ||
+            cred.email?.toLowerCase().includes(search) ||
+            cred.category?.toLowerCase().includes(search) ||
+            getDomainName(cred.domainId)?.toLowerCase().includes(search)
         )
+      }
 
-        // Ensure all credentials have domain information populated
-        const credentialsWithDomains = (response.credentials || []).map((credential) => {
-          if (credential.domainId) {
-            const domain = availableDomains.value.find((d) => d.id === credential.domainId)
-            if (domain) {
-              return {
-                ...credential,
-                domainName: domain.name,
-                website: domain.name // Ensure website field has the domain name as fallback
-              }
-            }
-          }
-          return credential
-        })
+      // Apply category filter
+      if (categoryFilter.value) {
+        result = result.filter((cred) => cred.category === categoryFilter.value)
+      }
 
-        allCredentials.value = credentialsWithDomains
-        credentials.value = [...allCredentials.value]
+      // Apply favorites filter
+      if (showFavoritesOnly.value) {
+        result = result.filter((cred) => cred.favorite)
+      }
+
+      return result
+    })
+
+    // Load all credentials
+    const fetchCredentials = async () => {
+      loading.value = true
+      initialLoadComplete.value = false
+
+      try {
+        const response = await CredentialService.getAllCredentialsForVault(vaultId.value)
+        credentials.value = response.credentials || []
         vaultName.value = response.vaultName || 'Vault'
+        totalLoaded.value = credentials.value.length
 
         // Extract unique categories
         const categories = new Set<string>()
-        allCredentials.value.forEach((cred) => {
+        credentials.value.forEach((cred) => {
           if (cred.category) {
             categories.add(cred.category)
           }
@@ -790,14 +823,17 @@ export default defineComponent({
           name: cat,
           value: cat
         }))
+
+        initialLoadComplete.value = true
       } catch (error) {
         console.error('Failed to fetch credentials:', error)
-        handleError(error, 'Failed to fetch credentials')
+        handleError(error, CREDENTIAL_ERROR_MESSAGES.FETCH_CREDENTIALS_FAILED)
       } finally {
         loading.value = false
       }
     }
 
+    // Load all domains
     const fetchDomains = async () => {
       try {
         const result = await DomainService.getDomains(0, DEFAULTS.LARGE_PAGE_SIZE)
@@ -808,56 +844,32 @@ export default defineComponent({
       }
     }
 
-    const applyFilters = () => {
-      let filtered = [...allCredentials.value]
-
-      // Apply favorites filter
-      if (showFavoritesOnly.value) {
-        filtered = filtered.filter((c) => c.favorite)
-      }
-
-      // Apply category filter
-      if (categoryFilter.value) {
-        filtered = filtered.filter((c) => c.category === categoryFilter.value)
-      }
-
-      // Apply global search filter
-      if (filters.value.global.value) {
-        const searchTerm = String(filters.value.global.value).toLowerCase()
-        filtered = filtered.filter((cred) => {
-          // Check each searchable field for the search term
-          return (
-            (cred.website && cred.website.toLowerCase().includes(searchTerm)) ||
-            (cred.domainName && cred.domainName.toLowerCase().includes(searchTerm)) ||
-            (cred.domainUrl && cred.domainUrl.toLowerCase().includes(searchTerm)) ||
-            (cred.username && cred.username.toLowerCase().includes(searchTerm)) ||
-            (cred.email && cred.email.toLowerCase().includes(searchTerm)) ||
-            (cred.category && cred.category.toLowerCase().includes(searchTerm))
-          )
-        })
-      }
-
-      credentials.value = filtered
+    // Event handlers
+    const onSortChange = (event: any) => {
+      sortField.value = event.sortField
+      sortOrder.value = event.sortOrder
     }
 
-    const onSort = () => {
-      fetchCredentials()
+    const onPageChange = (event: any) => {
+      first.value = event.first
+      rows.value = event.rows
+    }
+
+    const onFilterChange = (event: any) => {
+      filters.value.global.value = event.target.value
+      first.value = 0 // Reset to first page when filter changes
     }
 
     const toggleFavoritesFilter = () => {
       showFavoritesOnly.value = !showFavoritesOnly.value
-      applyFilters()
+      first.value = 0 // Reset to first page
     }
 
     const onCategoryFilterChange = () => {
-      applyFilters()
+      first.value = 0 // Reset to first page
     }
 
-    const onRowsPerPageChange = (event: { rows: number }) => {
-      rows.value = event.rows
-      fetchCredentials(0) // Reset to first page when changing page size
-    }
-
+    // CRUD operations
     const openCreateCredentialDialog = () => {
       resetCredentialForm()
       showCreateCredentialDialog.value = true
@@ -888,13 +900,13 @@ export default defineComponent({
           }
         }
 
-        allCredentials.value.unshift(createdCredential)
-        applyFilters()
+        credentials.value.unshift(createdCredential)
+        totalLoaded.value = credentials.value.length
         showCreateCredentialDialog.value = false
         handleSuccess(CREDENTIAL_SUCCESS_MESSAGES.CREATE_CREDENTIAL_SUCCESS)
       } catch (error) {
         console.error('Failed to create credential:', error)
-        handleError(error, 'Credential Creation Failed')
+        handleError(error, CREDENTIAL_ERROR_MESSAGES.CREATE_CREDENTIAL_FAILED)
       } finally {
         submitting.value = false
       }
@@ -942,18 +954,18 @@ export default defineComponent({
           }
         }
 
-        const index = allCredentials.value.findIndex((c) => c.id === editCredential.id)
+        const index = credentials.value.findIndex((c) => c.id === editCredential.id)
         if (index !== -1) {
-          allCredentials.value[index] = updatedCredential
+          credentials.value[index] = updatedCredential
         }
 
         // If credential is currently being viewed, update the view as well
         if (viewingCredential.id === updatedCredential.id) {
           Object.assign(viewingCredential, {
             website:
+              getDomainName(updatedCredential.domainId) ||
               updatedCredential.website ||
               updatedCredential.domainName ||
-              updatedCredential.domainUrl ||
               '',
             username: updatedCredential.username,
             email: updatedCredential.email || '',
@@ -966,12 +978,11 @@ export default defineComponent({
           })
         }
 
-        applyFilters()
         showEditCredentialDialog.value = false
         handleSuccess(CREDENTIAL_SUCCESS_MESSAGES.UPDATE_CREDENTIAL_SUCCESS)
       } catch (error) {
         console.error('Failed to update credential:', error)
-        handleError(error, 'Credential Update Failed')
+        handleError(error, CREDENTIAL_ERROR_MESSAGES.UPDATE_CREDENTIAL_FAILED)
       } finally {
         submitting.value = false
       }
@@ -980,18 +991,8 @@ export default defineComponent({
     const viewCredential = (credential: Credential) => {
       viewingCredential.id = credential.id
       viewingCredential.domainId = credential.domainId || ''
-
-      if (credential.domainId) {
-        // If credential has a domainId, use the domain name from availableDomains
-        const domain = availableDomains.value.find((d) => d.id === credential.domainId)
-        viewingCredential.website =
-          domain?.name || credential.domainName || credential.website || ''
-      } else {
-        // Fallback to existing properties
-        viewingCredential.website =
-          credential.website || credential.domainName || credential.domainUrl || ''
-      }
-
+      viewingCredential.website =
+        getDomainName(credential.domainId) || credential.website || credential.domainName || ''
       viewingCredential.username = credential.username
       viewingCredential.email = credential.email || ''
       viewingCredential.password = credential.password
@@ -1024,17 +1025,15 @@ export default defineComponent({
         )
 
         // Update the credential in our list
-        const index = allCredentials.value.findIndex((c) => c.id === id)
+        const index = credentials.value.findIndex((c) => c.id === id)
         if (index !== -1) {
-          allCredentials.value[index].lastUsed = updatedCredential.lastUsed
+          credentials.value[index].lastUsed = updatedCredential.lastUsed
         }
 
         // Update viewing credential if it's the same one
         if (viewingCredential.id === id) {
           viewingCredential.lastUsed = updatedCredential.lastUsed
         }
-
-        applyFilters()
       } catch (error) {
         console.error('Failed to update last used timestamp:', error)
         handleError(error, CREDENTIAL_ERROR_MESSAGES.UPDATE_LAST_USED_FAILED)
@@ -1049,9 +1048,9 @@ export default defineComponent({
         )
 
         // Update the credential in our list
-        const index = allCredentials.value.findIndex((c) => c.id === credential.id)
+        const index = credentials.value.findIndex((c) => c.id === credential.id)
         if (index !== -1) {
-          allCredentials.value[index].favorite = updatedCredential.favorite
+          credentials.value[index].favorite = updatedCredential.favorite
         }
 
         // Update viewing credential if it's the same one
@@ -1059,7 +1058,6 @@ export default defineComponent({
           viewingCredential.favorite = updatedCredential.favorite
         }
 
-        applyFilters()
         handleSuccess(CREDENTIAL_SUCCESS_MESSAGES.TOGGLE_FAVORITE_SUCCESS)
       } catch (error) {
         console.error('Failed to toggle favorite status:', error)
@@ -1071,36 +1069,9 @@ export default defineComponent({
       await toggleFavorite({ id: viewingCredential.id } as Credential)
     }
 
-    const editFromViewDialog = () => {
-      showViewCredentialDialog.value = false
-
-      // Find the full credential object to get all necessary data
-      const fullCredential = allCredentials.value.find((c) => c.id === viewingCredential.id)
-
-      if (fullCredential) {
-        startEditCredential(fullCredential)
-      } else {
-        startEditCredential({
-          id: viewingCredential.id,
-          website: viewingCredential.website,
-          username: viewingCredential.username,
-          email: viewingCredential.email,
-          password: viewingCredential.password,
-          notes: viewingCredential.notes,
-          category: viewingCredential.category,
-          favorite: viewingCredential.favorite,
-          domainId: viewingCredential.domainId
-        } as Credential)
-      }
-    }
-
-    const closeViewDialog = () => {
-      showViewCredentialDialog.value = false
-    }
-
     const confirmDelete = (credential: Credential) => {
       confirm.require({
-        message: `Are you sure you want to delete credential for "${credential.website || credential.domainName || 'this website'}"?`,
+        message: `Are you sure you want to delete credential for "${getDomainName(credential.domainId) || credential.website || credential.domainName || 'this website'}"?`,
         header: 'Delete Credential',
         icon: 'pi pi-exclamation-triangle',
         acceptClass: 'p-button-danger',
@@ -1111,9 +1082,8 @@ export default defineComponent({
     const deleteCredential = async (id: string) => {
       try {
         await CredentialService.deleteCredential(vaultId.value, id)
-        allCredentials.value = allCredentials.value.filter((c) => c.id !== id)
-
-        applyFilters()
+        credentials.value = credentials.value.filter((c) => c.id !== id)
+        totalLoaded.value = credentials.value.length
 
         // Close view dialog if the deleted credential is currently being viewed
         if (viewingCredential.id === id) {
@@ -1123,8 +1093,28 @@ export default defineComponent({
         handleSuccess(CREDENTIAL_SUCCESS_MESSAGES.DELETE_CREDENTIAL_SUCCESS)
       } catch (error) {
         console.error('Failed to delete credential:', error)
-        handleError(error, 'Credential Deletion Failed')
+        handleError(error, CREDENTIAL_ERROR_MESSAGES.DELETE_CREDENTIAL_FAILED)
       }
+    }
+
+    // Dialog and form management
+    const editFromViewDialog = () => {
+      showViewCredentialDialog.value = false
+      startEditCredential({
+        id: viewingCredential.id,
+        website: viewingCredential.website,
+        username: viewingCredential.username,
+        email: viewingCredential.email,
+        password: viewingCredential.password,
+        notes: viewingCredential.notes,
+        category: viewingCredential.category,
+        favorite: viewingCredential.favorite,
+        domainId: viewingCredential.domainId
+      } as Credential)
+    }
+
+    const closeViewDialog = () => {
+      showViewCredentialDialog.value = false
     }
 
     const resetCredentialForm = () => {
@@ -1142,10 +1132,6 @@ export default defineComponent({
       v$.value.editCredential.$reset()
     }
 
-    const goBackToVaults = () => {
-      router.push('/vaults')
-    }
-
     const cancelCreate = () => {
       resetCredentialForm()
       showCreateCredentialDialog.value = false
@@ -1155,6 +1141,11 @@ export default defineComponent({
       showEditCredentialDialog.value = false
     }
 
+    const goBackToVaults = () => {
+      router.push('/vaults')
+    }
+
+    // Password management
     const generatePassword = () => {
       const length = PASSWORD_SETTINGS.DEFAULT_LENGTH
       const charset = PASSWORD_SETTINGS.DEFAULT_CHARSET
@@ -1181,6 +1172,7 @@ export default defineComponent({
       editCredential.password = password
     }
 
+    // Helper methods
     const formatDate = (dateString: string | Date) => {
       return moment(dateString).format('MMM D, YYYY')
     }
@@ -1204,7 +1196,6 @@ export default defineComponent({
 
     const openDomainUrl = (url: string | null) => {
       if (url) {
-        // Ensure URL has protocol
         let fullUrl = url
         if (!url.startsWith('http://') && !url.startsWith('https://')) {
           fullUrl = 'https://' + url
@@ -1213,30 +1204,31 @@ export default defineComponent({
       }
     }
 
-    // Watch for filter changes to apply them
-    watch([showFavoritesOnly, categoryFilter, () => filters.value.global.value], () => {
-      applyFilters()
-    })
-
+    // Initialize data
     onMounted(async () => {
       await fetchDomains()
-      fetchCredentials(0)
+      fetchCredentials()
     })
 
     return {
-      // Vault data
+      // Vault and credential data
       vaultName,
       credentials,
+      filteredCredentials,
+      totalLoaded,
 
       // UI state
       loading,
       submitting,
+      initialLoadComplete,
       showCreateCredentialDialog,
       showEditCredentialDialog,
       showViewCredentialDialog,
       passwordVisible,
 
-      // Filtering and sorting
+      // Pagination and filtering
+      first,
+      rows,
       showFavoritesOnly,
       sortField,
       sortOrder,
@@ -1292,11 +1284,11 @@ export default defineComponent({
       // Filter actions
       toggleFavoritesFilter,
       onCategoryFilterChange,
+      onFilterChange,
 
       // Table events
-      onSort,
-      onRowsPerPageChange,
-      rows,
+      onSortChange,
+      onPageChange,
 
       // Domain-related helpers
       availableDomains,
@@ -1326,10 +1318,31 @@ export default defineComponent({
   padding: 0.25rem;
 }
 
-.actions {
+.actions-container {
   margin-bottom: 1rem;
+}
+
+.actions {
   display: flex;
   justify-content: flex-end;
+}
+
+.table-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 1rem 0 1rem 0;
+}
+
+.search-input {
+  width: 100%;
+  max-width: 300px;
+}
+
+.filter-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
 }
 
 .data-table-container {
@@ -1380,21 +1393,6 @@ export default defineComponent({
 .favorite-icon {
   cursor: pointer;
   font-size: 1.1rem;
-}
-
-.table-header {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.search-input {
-  flex-grow: 1;
-}
-
-.category-filter {
-  width: 180px;
 }
 
 /* View credential dialog styling */
@@ -1466,8 +1464,7 @@ export default defineComponent({
   font-size: 1.1rem;
 }
 
-.form-error,
-:deep(.p-error) {
+.form-error {
   color: var(--red-500, #f44336) !important;
   font-size: 0.875rem;
   margin-top: 0.25rem;

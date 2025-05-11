@@ -21,8 +21,6 @@ import {
  * Service for handling credential operations
  */
 export class CredentialService {
-  // Validation constants - we should also move these to appConstants.ts in a future refactor
-
   /**
    * Fetches all credentials for a vault with pagination
    * @param vaultId Vault ID
@@ -50,12 +48,16 @@ export class CredentialService {
     }
 
     try {
+      const params: Record<string, any> = { page, size }
+      if (sort) params.sort = sort
+      if (direction) params.direction = direction
+
       const response = await axios.get<{
         item: CredentialListResponse
         success: boolean
         message?: string
       }>(`${API_PATHS.VAULTS.BASE}/${vaultId}/credentials`, {
-        params: { page, size, sort, direction },
+        params,
         headers: {
           Authorization: `Bearer ${token}`
         }
@@ -405,6 +407,7 @@ export class CredentialService {
    * @param size Page size
    * @param sort Sort field
    * @param direction Sort direction (asc/desc)
+   * @param filters Filters for credentials
    * @returns Decrypted credentials, total count, and vault name
    */
   static async getCredentials(
@@ -412,9 +415,26 @@ export class CredentialService {
     page = 0,
     size = DEFAULTS.PAGE_SIZE,
     sort?: string,
-    direction: string = DEFAULTS.DEFAULT_SORT_DIRECTION
+    direction: string = DEFAULTS.DEFAULT_SORT_DIRECTION,
+    filters?: {
+      favorite?: boolean
+      category?: string
+      search?: string
+    }
   ) {
     try {
+      // Build parameters including filters
+      const params: Record<string, any> = { page, size }
+      if (sort) params.sort = sort
+      if (direction) params.direction = direction
+
+      // Add filter parameters
+      if (filters) {
+        if (filters.favorite !== undefined) params.favorite = filters.favorite
+        if (filters.category) params.category = filters.category
+        if (filters.search) params.search = filters.search
+      }
+
       const response = await this.fetchCredentials(vaultId, page, size, sort, direction)
 
       if (response && Array.isArray(response.credentials)) {
@@ -606,13 +626,17 @@ export class CredentialService {
    * Gets all credentials for a vault without pagination
    * Used for exports and backups
    * @param vaultId Vault ID
-   * @returns All decrypted credentials for the vault
+   * @returns All decrypted credentials and vault name
    */
-  static async getAllCredentialsForVault(vaultId: string): Promise<Credential[]> {
+  static async getAllCredentialsForVault(
+    vaultId: string
+  ): Promise<{ credentials: Credential[]; vaultName: string }> {
     try {
-      // Use a large page size to get all credentials
       const result = await this.getCredentials(vaultId, 0, DEFAULTS.LARGE_PAGE_SIZE)
-      return result.credentials
+      return {
+        credentials: result.credentials,
+        vaultName: result.vaultName
+      }
     } catch (error) {
       console.error(`Failed to get all credentials for vault ${vaultId}:`, error)
       throw ApiErrorService.handleError(error)

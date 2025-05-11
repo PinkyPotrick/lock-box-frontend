@@ -3,34 +3,57 @@
   <div class="vaults">
     <p-toast />
     <h2>Manage Your Vaults</h2>
-    <div class="actions">
-      <p-button
-        label="Add Vault"
-        icon="pi pi-plus"
-        @click="showCreateVaultDialog = true"
-      ></p-button>
+
+    <div class="actions-container">
+      <div class="actions">
+        <p-button
+          label="Add Vault"
+          icon="pi pi-plus"
+          @click="showCreateVaultDialog = true"
+        ></p-button>
+      </div>
+
+      <div class="table-header">
+        <p-input-text
+          v-model="filters.global.value"
+          placeholder="Search vaults..."
+          class="search-input"
+          @input="onFilterChange"
+        />
+
+        <div class="data-controls">
+          <div class="data-status">
+            <span v-if="initialLoadComplete">{{ totalRecords }} vaults loaded</span>
+            <span v-else>Loading vaults...</span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <p-data-table
       class="data-table-container"
-      :value="vaults"
-      paginator
+      :value="filteredVaults"
+      :paginator="true"
       :rows="rows"
-      :rowsPerPageOptions="[5, 10, 20]"
-      :totalRecords="totalRecords"
+      v-model:first="first"
+      :rowsPerPageOptions="[5, 10, 20, 50]"
+      :totalRecords="filteredVaults.length"
       :loading="loading"
-      :emptyMessage="'No vaults found'"
-      @page="onRowsPerPageChange"
+      :emptyMessage="loading ? 'Loading vaults...' : 'No vaults found'"
+      dataKey="id"
+      @page="onPageChange"
+      paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink RowsPerPageDropdown CurrentPageReport"
+      :currentPageReportTemplate="'{first} to {last} of {totalRecords} vaults'"
     >
       <p-column field="icon" header="">
         <template #body="slotProps">
           <i :class="slotProps.data.icon || 'pi pi-lock'"></i>
         </template>
       </p-column>
-      <p-column field="name" header="Name"></p-column>
-      <p-column field="description" header="Description"></p-column>
-      <p-column field="credentialCount" header="Credentials"></p-column>
-      <p-column field="updatedAt" header="Last Updated">
+      <p-column field="name" header="Name" sortable></p-column>
+      <p-column field="description" header="Description" sortable></p-column>
+      <p-column field="credentialCount" header="Credentials" sortable></p-column>
+      <p-column field="updatedAt" header="Last Updated" sortable>
         <template #body="slotProps">
           {{ formatDate(slotProps.data.updatedAt) }}
         </template>
@@ -41,16 +64,19 @@
             icon="pi pi-pencil"
             class="p-button-sm"
             @click="startEditVault(slotProps.data)"
+            v-tooltip.top="'Edit'"
           />
           <p-button
             icon="pi pi-eye"
             class="p-button-sm p-button-info"
             @click="goToVaultCredentials(slotProps.data.id)"
+            v-tooltip.top="'View credentials'"
           />
           <p-button
             icon="pi pi-trash"
             class="p-button-sm p-button-danger"
             @click="confirmDelete(slotProps.data)"
+            v-tooltip.left="'Delete'"
           />
         </template>
       </p-column>
@@ -71,8 +97,9 @@
             id="create-vault-name"
             v-model="newVault.name"
             :class="{ 'p-invalid': v$.newVault.name.$invalid && v$.newVault.name.$dirty }"
+            @blur="v$.newVault.name.$touch()"
           />
-          <small class="p-error" v-if="v$.newVault.name.$invalid && v$.newVault.name.$dirty">
+          <small class="form-error" v-if="v$.newVault.name.$invalid && v$.newVault.name.$dirty">
             {{ v$.newVault.name.$errors[0].$message }}
           </small>
         </div>
@@ -111,9 +138,10 @@
             :class="{
               'p-invalid': v$.newVault.description.$invalid && v$.newVault.description.$dirty
             }"
+            @blur="v$.newVault.description.$touch()"
           />
           <small
-            class="p-error"
+            class="form-error"
             v-if="v$.newVault.description.$invalid && v$.newVault.description.$dirty"
           >
             {{ v$.newVault.description.$errors[0].$message }}
@@ -148,8 +176,9 @@
             id="edit-vault-name"
             v-model="editVault.name"
             :class="{ 'p-invalid': v$.editVault.name.$invalid && v$.editVault.name.$dirty }"
+            @blur="v$.editVault.name.$touch()"
           />
-          <small class="p-error" v-if="v$.editVault.name.$invalid && v$.editVault.name.$dirty">
+          <small class="form-error" v-if="v$.editVault.name.$invalid && v$.editVault.name.$dirty">
             {{ v$.editVault.name.$errors[0].$message }}
           </small>
         </div>
@@ -188,9 +217,10 @@
             :class="{
               'p-invalid': v$.editVault.description.$invalid && v$.editVault.description.$dirty
             }"
+            @blur="v$.editVault.description.$touch()"
           />
           <small
-            class="p-error"
+            class="form-error"
             v-if="v$.editVault.description.$invalid && v$.editVault.description.$dirty"
           >
             {{ v$.editVault.description.$errors[0].$message }}
@@ -216,16 +246,25 @@
 </template>
 
 <script lang="ts">
-import { VAULT_ERROR_MESSAGES, VAULT_SUCCESS_MESSAGES } from '@/constants/appConstants'
+import { DEFAULTS, VAULT_ERROR_MESSAGES, VAULT_SUCCESS_MESSAGES } from '@/constants/appConstants'
 import { type Vault } from '@/services/encryption/vaultEncryptionService'
 import { useToastService } from '@/services/toastService'
 import { VaultService } from '@/services/vaultService'
 import { useVuelidate } from '@vuelidate/core'
-import { maxLength, required } from '@vuelidate/validators'
+import { helpers, maxLength, required } from '@vuelidate/validators'
 import moment from 'moment'
+import Tooltip from 'primevue/tooltip'
 import { useConfirm } from 'primevue/useconfirm'
-import { computed, defineComponent, onMounted, reactive, ref } from 'vue'
+import { computed, defineComponent, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+
+// Define filter match modes
+const FILTER_MATCH_MODES = {
+  CONTAINS: 'contains',
+  EQUALS: 'equals',
+  STARTS_WITH: 'startsWith',
+  ENDS_WITH: 'endsWith'
+}
 
 interface VaultData {
   name: string
@@ -234,21 +273,33 @@ interface VaultData {
 }
 
 export default defineComponent({
+  directives: {
+    tooltip: Tooltip
+  },
   setup() {
     const router = useRouter()
     const confirm = useConfirm()
     const { handleError, handleSuccess } = useToastService()
 
-    // State
+    // Vault data
     const vaults = ref<Vault[]>([])
     const totalRecords = ref(0)
+
+    // UI state
     const loading = ref(false)
     const submitting = ref(false)
+    const initialLoadComplete = ref(false)
     const showCreateVaultDialog = ref(false)
     const showEditVaultDialog = ref(false)
 
-    // Add a reactive reference for rows per page
-    const rows = ref(10)
+    // Pagination
+    const first = ref(0)
+    const rows = ref(DEFAULTS.PAGE_SIZE)
+
+    // Filtering
+    const filters = ref({
+      global: { value: null, matchMode: FILTER_MATCH_MODES.CONTAINS }
+    })
 
     // Form data
     const newVault = reactive<VaultData>({
@@ -264,19 +315,43 @@ export default defineComponent({
       icon: 'pi pi-lock'
     })
 
+    // Computed property for filtered vaults
+    const filteredVaults = computed(() => {
+      const filterValue = filters.value.global.value
+      if (!filterValue) {
+        return vaults.value
+      }
+
+      const searchLower = String(filterValue).toLowerCase()
+      return vaults.value.filter(
+        (vault) =>
+          vault.name.toLowerCase().includes(searchLower) ||
+          (vault.description && vault.description.toLowerCase().includes(searchLower))
+      )
+    })
+
     // Validation rules
+    const requiredMsg = 'This field is required'
+    const maxLengthMsg = (max: number) => `Maximum ${max} characters allowed`
+
     const rules = {
       newVault: {
-        name: { required, maxLength: maxLength(50) },
+        name: {
+          required: helpers.withMessage(requiredMsg, required),
+          maxLength: helpers.withMessage(maxLengthMsg(50), maxLength(50))
+        },
         description: {
-          maxLength: maxLength(200),
+          maxLength: helpers.withMessage(maxLengthMsg(200), maxLength(200)),
           $autoDirty: true
         }
       },
       editVault: {
-        name: { required, maxLength: maxLength(50) },
+        name: {
+          required: helpers.withMessage(requiredMsg, required),
+          maxLength: helpers.withMessage(maxLengthMsg(50), maxLength(50))
+        },
         description: {
-          maxLength: maxLength(200),
+          maxLength: helpers.withMessage(maxLengthMsg(200), maxLength(200)),
           $autoDirty: true
         }
       }
@@ -295,29 +370,25 @@ export default defineComponent({
       { name: 'Database', value: 'pi pi-database' }
     ]
 
+    // Computed properties for form validation
     const isFormValid = computed(() => {
-      return (
-        newVault.name &&
-        newVault.name.length <= 50 &&
-        (!newVault.description || newVault.description.length <= 200)
-      )
+      return !v$.value.newVault.$invalid && newVault.name
     })
 
     const isEditFormValid = computed(() => {
-      return (
-        editVault.name &&
-        editVault.name.length <= 50 &&
-        (!editVault.description || editVault.description.length <= 200)
-      )
+      return !v$.value.editVault.$invalid && editVault.name
     })
 
-    // Methods
-    const fetchVaults = async (page = 0) => {
+    // Load vaults
+    const fetchVaults = async () => {
       loading.value = true
+      initialLoadComplete.value = false
+
       try {
-        const result = await VaultService.getVaults(page, rows.value)
+        const result = await VaultService.getVaults(0, DEFAULTS.LARGE_PAGE_SIZE)
         vaults.value = result.vaults
         totalRecords.value = result.totalCount
+        initialLoadComplete.value = true
       } catch (error) {
         console.error('Failed to fetch vaults:', error)
         handleError(error, VAULT_ERROR_MESSAGES.FETCH_VAULTS_FAILED)
@@ -328,12 +399,18 @@ export default defineComponent({
       }
     }
 
-    // Add handler for rows per page change
-    const onRowsPerPageChange = (event: { rows: number }) => {
+    // Event handlers
+    const onPageChange = (event: any) => {
+      first.value = event.first
       rows.value = event.rows
-      fetchVaults(0) // Reset to first page when changing page size
     }
 
+    const onFilterChange = (event: any) => {
+      filters.value.global.value = event.target.value
+      first.value = 0 // Reset to first page when filter changes
+    }
+
+    // CRUD operations
     const createVault = async () => {
       v$.value.newVault.$touch()
       if (v$.value.newVault.$invalid) return
@@ -415,10 +492,12 @@ export default defineComponent({
       }
     }
 
+    // Navigation
     const goToVaultCredentials = (vaultId: string) => {
       router.push(`/vaults/${vaultId}/credentials`)
     }
 
+    // Helper methods
     const resetNewVault = () => {
       newVault.name = ''
       newVault.description = ''
@@ -445,6 +524,15 @@ export default defineComponent({
       return option ? option.name : 'Icon'
     }
 
+    // Watch for filter changes to reset pagination
+    watch(
+      () => filters.value.global.value,
+      () => {
+        first.value = 0
+      }
+    )
+
+    // Initialize data when component mounts
     onMounted(() => {
       fetchVaults()
     })
@@ -452,13 +540,20 @@ export default defineComponent({
     return {
       // Data
       vaults,
+      filteredVaults,
       totalRecords,
 
       // UI state
       loading,
       submitting,
+      initialLoadComplete,
       showCreateVaultDialog,
       showEditVaultDialog,
+
+      // Pagination and filtering
+      first,
+      rows,
+      filters,
 
       // Form data
       newVault,
@@ -470,9 +565,9 @@ export default defineComponent({
       isFormValid,
       isEditFormValid,
 
-      // Pagination
-      rows,
-      onRowsPerPageChange,
+      // Event handlers
+      onPageChange,
+      onFilterChange,
 
       // CRUD operations
       createVault,
@@ -499,10 +594,36 @@ export default defineComponent({
   padding: 1rem 2rem;
 }
 
-.actions {
+.actions-container {
   margin-bottom: 1rem;
+}
+
+.actions {
   display: flex;
   justify-content: flex-end;
+}
+
+.table-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.search-input {
+  width: 100%;
+  max-width: 300px;
+}
+
+.data-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.data-status {
+  font-size: 0.875rem;
+  color: var(--text-color-secondary);
 }
 
 .dialog-content {
@@ -521,13 +642,19 @@ export default defineComponent({
   font-weight: 500;
 }
 
-.p-inputtext,
-.p-select,
-.p-textarea {
+:deep(.p-inputtext),
+:deep(.p-textarea) {
   width: 100%;
 }
 
-/* Ensure textarea expands properly */
+:deep(.p-dialog .p-select) {
+  width: 100%;
+}
+
+:deep(.form-field .p-select) {
+  width: 100%;
+}
+
 :deep(.p-textarea) {
   width: 100%;
 }
@@ -537,23 +664,16 @@ export default defineComponent({
   min-height: 100px;
 }
 
-/* Fix icon display in dropdown */
 .icon-option {
   display: inline-flex;
   align-items: center;
 }
 
-/* Add spacing between icon and text in dropdown options */
 .icon-option i {
   margin-right: 12px;
   font-size: 1.1rem;
 }
 
-:deep(.p-datatable-wrapper) {
-  margin-top: 1rem;
-}
-
-/* Table styling */
 :deep(.p-column-header-content) {
   justify-content: flex-start;
   padding-left: 1rem;
@@ -578,7 +698,6 @@ export default defineComponent({
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-/* Dialog styling */
 :deep(.p-dialog-content) {
   padding: 1.5rem;
 }
@@ -587,7 +706,6 @@ export default defineComponent({
   padding: 1rem 1.5rem;
 }
 
-/* Select component styling */
 :deep(.p-select-label) {
   display: flex !important;
   align-items: center !important;
@@ -620,5 +738,16 @@ export default defineComponent({
 
 :deep(.p-select-item:not(:last-child)) {
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.form-error {
+  color: var(--red-500, #f44336) !important;
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+  display: block;
+}
+
+:deep(.p-invalid) {
+  border-color: var(--red-500, #f44336) !important;
 }
 </style>
