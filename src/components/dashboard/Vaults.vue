@@ -30,8 +30,25 @@
       </div>
     </div>
 
+    <!-- Add this new tooltip component that appears after the table loads -->
+    <div class="credentials-tooltip" v-if="showCredentialsTooltip">
+      <div class="tooltip-content">
+        <i class="pi pi-info-circle" style="margin-right: 0.5rem"></i>
+        <span
+          >Click the <i class="pi pi-eye" style="margin: 0 0.3rem"></i> icon to view your
+          credentials</span
+        >
+        <p-button
+          icon="pi pi-times"
+          class="p-button-text p-button-sm p-button-rounded tooltip-close"
+          @click="dismissTooltip"
+          aria-label="Close tooltip"
+        />
+      </div>
+    </div>
+
     <p-data-table
-      class="data-table-container"
+      :class="['data-table-container', { 'tooltip-active': showCredentialsTooltip }]"
       :value="filteredVaults"
       :paginator="true"
       :rows="rows"
@@ -68,7 +85,7 @@
           />
           <p-button
             icon="pi pi-eye"
-            class="p-button-sm p-button-info"
+            class="p-button-sm p-button-info credentials-view-btn"
             @click="goToVaultCredentials(slotProps.data.id)"
             v-tooltip.top="'View credentials'"
           />
@@ -292,6 +309,9 @@ export default defineComponent({
     const showCreateVaultDialog = ref(false)
     const showEditVaultDialog = ref(false)
 
+    // Tooltip state
+    const showCredentialsTooltip = ref(false)
+
     // Pagination
     const first = ref(0)
     const rows = ref(DEFAULTS.PAGE_SIZE)
@@ -397,6 +417,17 @@ export default defineComponent({
       } finally {
         loading.value = false
       }
+    }
+
+    // Tooltip methods
+    const checkTooltipState = () => {
+      const tooltipDismissed = localStorage.getItem('credentialsTooltipDismissed') === 'true'
+      showCredentialsTooltip.value = !tooltipDismissed && initialLoadComplete.value
+    }
+
+    const dismissTooltip = () => {
+      showCredentialsTooltip.value = false
+      localStorage.setItem('credentialsTooltipDismissed', 'true')
     }
 
     // Event handlers
@@ -532,9 +563,22 @@ export default defineComponent({
       }
     )
 
+    // Watch for initial data load to show tooltip
+    watch(
+      () => initialLoadComplete.value,
+      (newVal) => {
+        if (newVal && vaults.value.length > 0) {
+          setTimeout(checkTooltipState, 500)
+        }
+      }
+    )
+
     // Initialize data when component mounts
     onMounted(() => {
       fetchVaults()
+      if (initialLoadComplete.value) {
+        checkTooltipState()
+      }
     })
 
     return {
@@ -549,6 +593,7 @@ export default defineComponent({
       initialLoadComplete,
       showCreateVaultDialog,
       showEditVaultDialog,
+      showCredentialsTooltip,
 
       // Pagination and filtering
       first,
@@ -578,6 +623,9 @@ export default defineComponent({
 
       // Navigation
       goToVaultCredentials,
+
+      // Tooltip methods
+      dismissTooltip,
 
       // Helper methods
       cancelCreate,
@@ -750,4 +798,85 @@ export default defineComponent({
 :deep(.p-invalid) {
   border-color: var(--red-500, #f44336) !important;
 }
+
+/* Add these new styles for the tooltip */
+.credentials-tooltip {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  z-index: 1000;
+  max-width: 320px;
+  animation: fadeIn 0.5s;
+}
+
+.tooltip-content {
+  display: flex;
+  align-items: center;
+  background-color: var(--primary-color, #2196f3);
+  color: white;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  position: relative;
+}
+
+.tooltip-close {
+  position: absolute;
+  top: -0.5rem;
+  right: -0.5rem;
+  color: white;
+  background-color: var(--primary-color, #2196f3);
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.credentials-view-btn {
+  position: relative;
+}
+
+.p-datatable-tbody tr:first-child .credentials-view-btn::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border: 2px solid var(--primary-color, #2196f3);
+  border-radius: 4px;
+  animation: pulse 1.5s infinite;
+  pointer-events: none;
+  opacity: 0.8;
+  display: none;
+}
+
+.tooltip-active.p-datatable-tbody tr:first-child .credentials-view-btn::after {
+  display: block;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(33, 150, 243, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(33, 150, 243, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(33, 150, 243, 0);
+  }
+}
 </style>
+```

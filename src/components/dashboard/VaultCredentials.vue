@@ -77,7 +77,7 @@
           ></i>
         </template>
       </p-column>
-      <p-column field="domain" header="Domain" sortable>
+      <p-column field="domain" header="Domain" :sortable="true">
         <template #body="slotProps">
           {{
             getDomainName(slotProps.data.domainId) ||
@@ -846,8 +846,21 @@ export default defineComponent({
 
     // Event handlers
     const onSortChange = (event: any) => {
-      sortField.value = event.sortField
-      sortOrder.value = event.sortOrder
+      if (event.sortField === 'domain') {
+        const sorted = [...credentials.value].sort((a, b) => {
+          const domainA = getDomainName(a.domainId) || a.domainName || a.website || ''
+          const domainB = getDomainName(b.domainId) || b.domainName || b.website || ''
+
+          return event.sortOrder === 1
+            ? domainA.localeCompare(domainB)
+            : domainB.localeCompare(domainA)
+        })
+
+        credentials.value = sorted
+      } else {
+        sortField.value = event.sortField
+        sortOrder.value = event.sortOrder
+      }
     }
 
     const onPageChange = (event: any) => {
