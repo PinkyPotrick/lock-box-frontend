@@ -1,6 +1,7 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <template>
   <div class="vaults">
+    <p-toast />
     <h2>Manage Your Vaults</h2>
     <div class="actions">
       <p-button
@@ -215,14 +216,15 @@
 </template>
 
 <script lang="ts">
+import { VAULT_ERROR_MESSAGES, VAULT_SUCCESS_MESSAGES } from '@/constants/appConstants'
 import { type Vault } from '@/services/encryption/vaultEncryptionService'
+import { useToastService } from '@/services/toastService'
 import { VaultService } from '@/services/vaultService'
 import { useVuelidate } from '@vuelidate/core'
 import { maxLength, required } from '@vuelidate/validators'
 import moment from 'moment'
 import { useConfirm } from 'primevue/useconfirm'
-import { useToast } from 'primevue/usetoast'
-import { defineComponent, onMounted, reactive, ref, computed } from 'vue'
+import { computed, defineComponent, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 interface VaultData {
@@ -235,7 +237,7 @@ export default defineComponent({
   setup() {
     const router = useRouter()
     const confirm = useConfirm()
-    const toast = useToast()
+    const { handleError, handleSuccess } = useToastService()
 
     // State
     const vaults = ref<Vault[]>([])
@@ -318,12 +320,7 @@ export default defineComponent({
         totalRecords.value = result.totalCount
       } catch (error) {
         console.error('Failed to fetch vaults:', error)
-        toast.add({
-          severity: 'error',
-          summary: 'Error',
-          detail: 'Failed to load vaults',
-          life: 3000
-        })
+        handleError(error, VAULT_ERROR_MESSAGES.FETCH_VAULTS_FAILED)
         vaults.value = []
         totalRecords.value = 0
       } finally {
@@ -348,20 +345,10 @@ export default defineComponent({
         totalRecords.value++
         resetNewVault()
         showCreateVaultDialog.value = false
-        toast.add({
-          severity: 'success',
-          summary: 'Success',
-          detail: 'Vault created successfully',
-          life: 3000
-        })
+        handleSuccess(VAULT_SUCCESS_MESSAGES.CREATE_VAULT_SUCCESS)
       } catch (error) {
         console.error('Failed to create vault:', error)
-        toast.add({
-          severity: 'error',
-          summary: 'Error',
-          detail: 'Failed to create vault',
-          life: 3000
-        })
+        handleError(error, VAULT_ERROR_MESSAGES.CREATE_VAULT_FAILED)
       } finally {
         submitting.value = false
       }
@@ -393,20 +380,10 @@ export default defineComponent({
         }
 
         showEditVaultDialog.value = false
-        toast.add({
-          severity: 'success',
-          summary: 'Success',
-          detail: 'Vault updated successfully',
-          life: 3000
-        })
+        handleSuccess(VAULT_SUCCESS_MESSAGES.UPDATE_VAULT_SUCCESS)
       } catch (error) {
         console.error('Failed to update vault:', error)
-        toast.add({
-          severity: 'error',
-          summary: 'Error',
-          detail: 'Failed to update vault',
-          life: 3000
-        })
+        handleError(error, VAULT_ERROR_MESSAGES.UPDATE_VAULT_FAILED)
       } finally {
         submitting.value = false
       }
@@ -431,20 +408,10 @@ export default defineComponent({
         await VaultService.deleteVault(id)
         vaults.value = vaults.value.filter((v) => v.id !== id)
         totalRecords.value--
-        toast.add({
-          severity: 'success',
-          summary: 'Success',
-          detail: 'Vault deleted successfully',
-          life: 3000
-        })
+        handleSuccess(VAULT_SUCCESS_MESSAGES.DELETE_VAULT_SUCCESS)
       } catch (error) {
         console.error('Failed to delete vault:', error)
-        toast.add({
-          severity: 'error',
-          summary: 'Error',
-          detail: 'Failed to delete vault',
-          life: 3000
-        })
+        handleError(error, VAULT_ERROR_MESSAGES.DELETE_VAULT_FAILED)
       }
     }
 
@@ -483,26 +450,41 @@ export default defineComponent({
     })
 
     return {
+      // Data
       vaults,
       totalRecords,
+
+      // UI state
       loading,
       submitting,
       showCreateVaultDialog,
       showEditVaultDialog,
+
+      // Form data
       newVault,
       editVault,
       iconOptions,
+
+      // Validation
       v$,
       isFormValid,
       isEditFormValid,
+
+      // Pagination
       rows,
       onRowsPerPageChange,
+
+      // CRUD operations
       createVault,
       startEditVault,
       updateVault,
       confirmDelete,
       deleteVault,
+
+      // Navigation
       goToVaultCredentials,
+
+      // Helper methods
       cancelCreate,
       cancelEdit,
       formatDate,
@@ -553,10 +535,6 @@ export default defineComponent({
 :deep(.p-textarea textarea) {
   width: 100%;
   min-height: 100px;
-}
-
-.p-button {
-  margin-right: 0.5rem;
 }
 
 /* Fix icon display in dropdown */

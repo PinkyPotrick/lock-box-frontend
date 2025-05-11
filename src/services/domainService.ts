@@ -1,6 +1,14 @@
 import axios from '@/axios-config'
 import { API_PATHS } from '@/constants/apiPaths'
+import {
+  DEFAULTS,
+  DOMAIN_ERROR_MESSAGES,
+  ERROR_TYPES,
+  GENERIC_ERROR_MESSAGES,
+  HTTP_STATUS
+} from '@/constants/appConstants'
 import { getAuthToken } from '@/stores/authStore'
+import { ApiError, ApiErrorService } from './apiErrorService'
 import type { Domain, DomainResponse } from './encryption/domainEncryptionService'
 import { DomainEncryptionService } from './encryption/domainEncryptionService'
 
@@ -22,25 +30,50 @@ export class DomainService {
    * @param sortDirection Sort direction ('asc' or 'desc')
    * @returns Domain list response
    */
-  static async fetchDomains(page = 0, size = 10, sortField?: string, sortDirection?: string) {
+  static async fetchDomains(
+    page = 0,
+    size = DEFAULTS.PAGE_SIZE,
+    sortField?: string,
+    sortDirection?: string
+  ) {
     const token = getAuthToken()
 
     if (!token) {
-      throw new Error('Authentication token is missing')
+      throw new ApiError(
+        GENERIC_ERROR_MESSAGES.AUTH_TOKEN_MISSING,
+        HTTP_STATUS.UNAUTHORIZED,
+        ERROR_TYPES.AUTH_ERROR
+      )
     }
 
-    const params: Record<string, any> = { page, size }
-    if (sortField) params.sort = sortField
-    if (sortDirection) params.direction = sortDirection
+    try {
+      const params: Record<string, any> = { page, size }
+      if (sortField) params.sort = sortField
+      if (sortDirection) params.direction = sortDirection
 
-    const response = await axios.get<DomainListResponse>(`${API_PATHS.DOMAINS.BASE}`, {
-      params,
-      headers: {
-        Authorization: `Bearer ${token}`
+      const response = await axios.get<{
+        item: DomainListResponse
+        success: boolean
+        message?: string
+      }>(`${API_PATHS.DOMAINS.BASE}`, {
+        params,
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      })
+
+      if (response.data && !response.data.success) {
+        throw new ApiError(
+          response.data.message || DOMAIN_ERROR_MESSAGES.FETCH_DOMAINS_FAILED,
+          HTTP_STATUS.BAD_REQUEST,
+          ERROR_TYPES.API_ERROR
+        )
       }
-    })
 
-    return response?.data?.item
+      return response?.data?.item
+    } catch (error) {
+      throw ApiErrorService.handleError(error)
+    }
   }
 
   /**
@@ -52,16 +85,36 @@ export class DomainService {
     const token = getAuthToken()
 
     if (!token) {
-      throw new Error('Authentication token is missing')
+      throw new ApiError(
+        GENERIC_ERROR_MESSAGES.AUTH_TOKEN_MISSING,
+        HTTP_STATUS.UNAUTHORIZED,
+        ERROR_TYPES.AUTH_ERROR
+      )
     }
 
-    const response = await axios.get<DomainResponse>(`${API_PATHS.DOMAINS.BASE}/${id}`, {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    })
+    try {
+      const response = await axios.get<{
+        item: DomainResponse
+        success: boolean
+        message?: string
+      }>(`${API_PATHS.DOMAINS.BASE}/${id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      })
 
-    return response?.data?.item
+      if (response.data && !response.data.success) {
+        throw new ApiError(
+          response.data.message || `${DOMAIN_ERROR_MESSAGES.FETCH_DOMAIN_FAILED} ${id}`,
+          HTTP_STATUS.BAD_REQUEST,
+          ERROR_TYPES.API_ERROR
+        )
+      }
+
+      return response?.data?.item
+    } catch (error) {
+      throw ApiErrorService.handleError(error)
+    }
   }
 
   /**
@@ -78,20 +131,40 @@ export class DomainService {
     const token = getAuthToken()
 
     if (!token) {
-      throw new Error('Authentication token is missing')
+      throw new ApiError(
+        GENERIC_ERROR_MESSAGES.AUTH_TOKEN_MISSING,
+        HTTP_STATUS.UNAUTHORIZED,
+        ERROR_TYPES.AUTH_ERROR
+      )
     }
 
-    // Encrypt the domain data
-    const encryptedData = await DomainEncryptionService.encryptDomainData(domainData)
+    try {
+      // Encrypt the domain data
+      const encryptedData = await DomainEncryptionService.encryptDomainData(domainData)
 
-    // Send to server
-    const response = await axios.post<DomainResponse>(`${API_PATHS.DOMAINS.BASE}`, encryptedData, {
-      headers: {
-        Authorization: `Bearer ${token}`
+      // Send to server
+      const response = await axios.post<{
+        item: DomainResponse
+        success: boolean
+        message?: string
+      }>(`${API_PATHS.DOMAINS.BASE}`, encryptedData, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      })
+
+      if (response.data && !response.data.success) {
+        throw new ApiError(
+          response.data.message || DOMAIN_ERROR_MESSAGES.CREATE_DOMAIN_FAILED,
+          HTTP_STATUS.BAD_REQUEST,
+          ERROR_TYPES.API_ERROR
+        )
       }
-    })
 
-    return response?.data?.item
+      return response?.data?.item
+    } catch (error) {
+      throw ApiErrorService.handleError(error)
+    }
   }
 
   /**
@@ -107,24 +180,40 @@ export class DomainService {
     const token = getAuthToken()
 
     if (!token) {
-      throw new Error('Authentication token is missing')
+      throw new ApiError(
+        GENERIC_ERROR_MESSAGES.AUTH_TOKEN_MISSING,
+        HTTP_STATUS.UNAUTHORIZED,
+        ERROR_TYPES.AUTH_ERROR
+      )
     }
 
-    // Encrypt the domain data
-    const encryptedData = await DomainEncryptionService.encryptDomainData(domainData)
+    try {
+      // Encrypt the domain data
+      const encryptedData = await DomainEncryptionService.encryptDomainData(domainData)
 
-    // Send to server
-    const response = await axios.put<DomainResponse>(
-      `${API_PATHS.DOMAINS.BASE}/${id}`,
-      encryptedData,
-      {
+      // Send to server
+      const response = await axios.put<{
+        item: DomainResponse
+        success: boolean
+        message?: string
+      }>(`${API_PATHS.DOMAINS.BASE}/${id}`, encryptedData, {
         headers: {
           Authorization: `Bearer ${token}`
         }
-      }
-    )
+      })
 
-    return response?.data?.item
+      if (response.data && !response.data.success) {
+        throw new ApiError(
+          response.data.message || `${DOMAIN_ERROR_MESSAGES.UPDATE_DOMAIN_FAILED} ${id}`,
+          HTTP_STATUS.BAD_REQUEST,
+          ERROR_TYPES.API_ERROR
+        )
+      }
+
+      return response?.data?.item
+    } catch (error) {
+      throw ApiErrorService.handleError(error)
+    }
   }
 
   /**
@@ -135,59 +224,56 @@ export class DomainService {
     const token = getAuthToken()
 
     if (!token) {
-      throw new Error('Authentication token is missing')
+      throw new ApiError(
+        GENERIC_ERROR_MESSAGES.AUTH_TOKEN_MISSING,
+        HTTP_STATUS.UNAUTHORIZED,
+        ERROR_TYPES.AUTH_ERROR
+      )
     }
 
-    await axios.delete(`${API_PATHS.DOMAINS.BASE}/${id}`, {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    })
-  }
-
-  /**
-   * Gets the credential count for a domain
-   * @param id Domain ID
-   * @returns Credential count
-   */
-  static async getCredentialCount(id: string) {
-    const token = getAuthToken()
-
-    if (!token) {
-      throw new Error('Authentication token is missing')
-    }
-
-    const response = await axios.get<{ item: number }>(
-      `${API_PATHS.DOMAINS.BASE}/${id}/credentials/count`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`
+    try {
+      const response = await axios.delete<{ success: boolean; message?: string }>(
+        `${API_PATHS.DOMAINS.BASE}/${id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
         }
-      }
-    )
+      )
 
-    return response?.data?.item
+      if (response.data && !response.data.success) {
+        throw new ApiError(
+          response.data.message || `${DOMAIN_ERROR_MESSAGES.DELETE_DOMAIN_FAILED} ${id}`,
+          HTTP_STATUS.BAD_REQUEST,
+          ERROR_TYPES.API_ERROR
+        )
+      }
+    } catch (error) {
+      throw ApiErrorService.handleError(error)
+    }
   }
 
   /**
-   * Gets all domains with pagination and decrypts them
-   * @param page Page number (0-based)
-   * @param size Page size
-   * @param sortField Field to sort by
+   * Gets a chunk of domains with pagination and decrypts them
+   * Optimized for chunked loading pattern
+   * @param page Page number (0-based) - represents the chunk number
+   * @param chunkSize Size of each chunk to fetch
+   * @param sortField Field to sort by on server (typically createAt for consistent chunk loading)
    * @param sortDirection Sort direction ('asc' or 'desc')
    * @returns Decrypted domains and total count
    */
   static async getDomains(
     page = 0,
-    size = 10,
-    sortField?: string,
-    sortDirection?: string
+    chunkSize = DEFAULTS.CHUNK_SIZE,
+    sortField = 'createdAt',
+    sortDirection = 'desc'
   ): Promise<{ domains: Domain[]; totalCount: number }> {
     try {
-      const response = await this.fetchDomains(page, size, sortField, sortDirection)
+      // Fetch the current chunk from the server
+      const response = await this.fetchDomains(page, chunkSize, sortField, sortDirection)
 
       if (response && Array.isArray(response.domains)) {
-        // Decrypt all domains
+        // Decrypt all domains - credential counts will come from the server
         const decryptedDomains = await DomainEncryptionService.decryptDomains(response.domains)
 
         return {
@@ -201,8 +287,7 @@ export class DomainService {
         totalCount: 0
       }
     } catch (error) {
-      console.error('Failed to fetch domains:', error)
-      throw error
+      throw ApiErrorService.handleError(error)
     }
   }
 
@@ -214,10 +299,19 @@ export class DomainService {
   static async getDomainById(id: string): Promise<Domain> {
     try {
       const response = await this.fetchDomainById(id)
-      return DomainEncryptionService.decryptDomain(response)
+
+      if (!response) {
+        throw new ApiError(
+          DOMAIN_ERROR_MESSAGES.DOMAIN_NOT_FOUND.replace('{id}', id),
+          HTTP_STATUS.NOT_FOUND,
+          ERROR_TYPES.NOT_FOUND_ERROR
+        )
+      }
+
+      // Simply decrypt the domain with its credential count from the server
+      return await DomainEncryptionService.decryptDomain(response)
     } catch (error) {
-      console.error(`Failed to fetch domain with ID ${id}:`, error)
-      throw error
+      throw ApiErrorService.handleError(error)
     }
   }
 
@@ -235,16 +329,19 @@ export class DomainService {
     try {
       const response = await this.createDomain(domainData)
 
-      // Add defensive check to ensure response exists and has required properties
-      if (!response || typeof response !== 'object') {
-        console.error('Invalid response from createDomain:', response)
-        throw new Error('Invalid response from server')
+      // Add defensive check to ensure response exists
+      if (!response) {
+        throw new ApiError(
+          GENERIC_ERROR_MESSAGES.INVALID_SERVER_RESPONSE,
+          HTTP_STATUS.INTERNAL_SERVER_ERROR,
+          ERROR_TYPES.API_ERROR
+        )
       }
 
-      return DomainEncryptionService.decryptDomain(response)
+      // New domains should use the credentialCount from response (which should be 0)
+      return await DomainEncryptionService.decryptDomain(response)
     } catch (error) {
-      console.error('Failed to create domain:', error)
-      throw error
+      throw ApiErrorService.handleError(error)
     }
   }
 
@@ -260,10 +357,60 @@ export class DomainService {
   ): Promise<Domain> {
     try {
       const response = await this.updateDomain(id, domainData)
-      return DomainEncryptionService.decryptDomain(response)
+
+      if (!response) {
+        throw new ApiError(
+          `${DOMAIN_ERROR_MESSAGES.UPDATE_DOMAIN_FAILED} ${id}`,
+          HTTP_STATUS.INTERNAL_SERVER_ERROR,
+          ERROR_TYPES.API_ERROR
+        )
+      }
+
+      // Updated domain should use the credentialCount from response
+      return await DomainEncryptionService.decryptDomain(response)
     } catch (error) {
-      console.error(`Failed to update domain with ID ${id}:`, error)
-      throw error
+      throw ApiErrorService.handleError(error)
+    }
+  }
+
+  /**
+   * Gets all domains without pagination and decrypts them
+   * Used for dropdowns and selectors
+   * @returns All decrypted domains
+   */
+  static async getAllDomains(): Promise<Domain[]> {
+    try {
+      // Fetch with a large size to get all domains
+      const response = await this.getDomains(0, DEFAULTS.LARGE_PAGE_SIZE)
+      return response.domains
+    } catch (error) {
+      console.error(DOMAIN_ERROR_MESSAGES.FETCH_ALL_DOMAINS_FAILED, error)
+      throw ApiErrorService.handleError(error)
+    }
+  }
+
+  /**
+   * Gets domains by name for search/autocomplete
+   * @param query Search query
+   * @returns Filtered domains that match the query
+   */
+  static async searchDomainsByName(query: string): Promise<Domain[]> {
+    try {
+      // Get all domains then filter client-side
+      // This is temporary - in production with large data, implement server-side search
+      const allDomains = await this.getAllDomains()
+
+      if (!query) return allDomains
+
+      const lowerQuery = query.toLowerCase()
+      return allDomains.filter(
+        (domain) =>
+          domain.name.toLowerCase().includes(lowerQuery) ||
+          (domain.url && domain.url.toLowerCase().includes(lowerQuery))
+      )
+    } catch (error) {
+      console.error(DOMAIN_ERROR_MESSAGES.SEARCH_DOMAINS_FAILED, error)
+      throw ApiErrorService.handleError(error)
     }
   }
 }

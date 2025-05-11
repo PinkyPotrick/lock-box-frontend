@@ -135,7 +135,7 @@ export class DomainEncryptionService {
       logo,
       createdAt,
       updatedAt,
-      credentialCount,
+      credentialCount, // Get credentialCount from response
       encryptedName,
       encryptedUrl,
       encryptedNotes,
@@ -162,7 +162,7 @@ export class DomainEncryptionService {
       const createdAtDate = this.parseLocalDateTime(createdAt)
       const updatedAtDate = this.parseLocalDateTime(updatedAt)
 
-      // Return the decrypted domain data
+      // Return the decrypted domain data with the credential count from the server
       return {
         id,
         userId,
@@ -170,7 +170,7 @@ export class DomainEncryptionService {
         url,
         notes,
         logo,
-        credentialCount,
+        credentialCount, // Use the count from server
         createdAt: createdAtDate,
         updatedAt: updatedAtDate
       }

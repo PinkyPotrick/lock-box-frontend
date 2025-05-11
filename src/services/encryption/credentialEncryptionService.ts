@@ -56,7 +56,9 @@ export interface CredentialResponse {
 export interface CredentialListResponse {
   credentials: CredentialResponse[]
   totalCount: number
-  vaultName: string
+  encryptedVaultName?: EncryptedDataAesCbc
+  helperVaultNameAesKey?: string
+  vaultName?: string // For backwards compatibility
 }
 
 /**
@@ -230,6 +232,26 @@ export class CredentialEncryptionService {
     } catch (error) {
       console.error('Failed to decrypt credential:', error)
       throw new Error('Failed to decrypt credential data')
+    }
+  }
+
+  /**
+   * Decrypts vault name from response
+   *
+   * @param encryptedVaultName Encrypted vault name
+   * @param helperKey Helper AES key for decryption
+   * @returns Decrypted vault name, or a default value if decryption fails
+   */
+  static decryptVaultName(encryptedVaultName?: EncryptedDataAesCbc, helperKey?: string): string {
+    if (!encryptedVaultName || !helperKey) {
+      return 'Vault'
+    }
+
+    try {
+      return this.decryptWithAES(encryptedVaultName, helperKey)
+    } catch (error) {
+      console.error('Failed to decrypt vault name:', error)
+      return 'Vault'
     }
   }
 

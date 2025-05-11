@@ -1,6 +1,7 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <template>
   <div class="audit">
+    <p-toast />
     <h2>Audit Logs</h2>
 
     <div class="filter-container">

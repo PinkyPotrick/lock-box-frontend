@@ -1,5 +1,6 @@
 <template>
   <div class="vault-credentials">
+    <p-toast />
     <div class="title-section">
       <p-button
         icon="pi pi-arrow-left"
@@ -73,7 +74,12 @@
       </p-column>
       <p-column field="domain" header="Domain" sortable>
         <template #body="slotProps">
-          {{ slotProps.data.domainName || slotProps.data.website || '-' }}
+          {{
+            getDomainName(slotProps.data.domainId) ||
+            slotProps.data.domainName ||
+            slotProps.data.website ||
+            '-'
+          }}
         </template>
       </p-column>
       <p-column field="username" header="Username" sortable></p-column>
@@ -171,6 +177,7 @@
             :class="{
               'p-invalid': v$.newCredential.username.$invalid && v$.newCredential.username.$dirty
             }"
+            @blur="v$.newCredential.username.$touch()"
           />
           <small
             class="p-error"
@@ -189,6 +196,7 @@
             :class="{
               'p-invalid': v$.newCredential.email.$invalid && v$.newCredential.email.$dirty
             }"
+            @blur="v$.newCredential.email.$touch()"
           />
           <small
             class="p-error"
@@ -210,6 +218,7 @@
               :class="{
                 'p-invalid': v$.newCredential.password.$invalid && v$.newCredential.password.$dirty
               }"
+              @blur="v$.newCredential.password.$touch()"
             />
             <p-button
               icon="pi pi-refresh"
@@ -249,6 +258,7 @@
             :class="{
               'p-invalid': v$.newCredential.notes.$invalid && v$.newCredential.notes.$dirty
             }"
+            @blur="v$.newCredential.notes.$touch()"
           />
           <small
             class="p-error"
@@ -337,6 +347,7 @@
             :class="{
               'p-invalid': v$.editCredential.username.$invalid && v$.editCredential.username.$dirty
             }"
+            @blur="v$.editCredential.username.$touch()"
           />
           <small
             class="p-error"
@@ -355,6 +366,7 @@
             :class="{
               'p-invalid': v$.editCredential.email.$invalid && v$.editCredential.email.$dirty
             }"
+            @blur="v$.editCredential.email.$touch()"
           />
           <small
             class="p-error"
@@ -377,6 +389,7 @@
                 'p-invalid':
                   v$.editCredential.password.$invalid && v$.editCredential.password.$dirty
               }"
+              @blur="v$.editCredential.password.$touch()"
             />
             <p-button
               icon="pi pi-refresh"
@@ -402,6 +415,7 @@
             optionLabel="name"
             optionValue="value"
             placeholder="Select a category"
+            @blur="v$.editCredential.category.$touch()"
           />
         </div>
 
@@ -416,6 +430,7 @@
             :class="{
               'p-invalid': v$.editCredential.notes.$invalid && v$.editCredential.notes.$dirty
             }"
+            @blur="v$.editCredential.notes.$touch()"
           />
           <small
             class="p-error"
@@ -559,18 +574,24 @@
 </template>
 
 <script lang="ts">
-import { DomainService } from '@/services/domainService'
+import {
+  CREDENTIAL_ERROR_MESSAGES,
+  CREDENTIAL_SUCCESS_MESSAGES,
+  DEFAULTS,
+  PASSWORD_SETTINGS
+} from '@/constants/appConstants'
 import { CredentialService } from '@/services/credentialService'
+import { DomainService } from '@/services/domainService'
 import type { Credential } from '@/services/encryption/credentialEncryptionService'
 import type { Domain } from '@/services/encryption/domainEncryptionService'
+import { useToastService } from '@/services/toastService'
 import { useVuelidate } from '@vuelidate/core'
 import { email, helpers, maxLength, required } from '@vuelidate/validators'
 import moment from 'moment'
+import Tooltip from 'primevue/tooltip'
 import { useConfirm } from 'primevue/useconfirm'
-import { useToast } from 'primevue/usetoast'
 import { computed, defineComponent, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import Tooltip from 'primevue/tooltip'
 
 // Define our own filter match modes
 const FILTER_MATCH_MODES = {
@@ -588,7 +609,7 @@ export default defineComponent({
     const route = useRoute()
     const router = useRouter()
     const confirm = useConfirm()
-    const toast = useToast()
+    const { handleError, handleSuccess, handleInfo } = useToastService()
 
     const vaultId = ref(route.params.vaultId as string)
     const vaultName = ref('')
@@ -703,6 +724,18 @@ export default defineComponent({
       { name: 'Shopping', value: 'Shopping' },
       { name: 'Work', value: 'Work' },
       { name: 'Entertainment', value: 'Entertainment' },
+      { name: 'Development', value: 'Development' },
+      { name: 'Personal', value: 'Personal' },
+      { name: 'Education', value: 'Education' },
+      { name: 'Finance', value: 'Finance' },
+      { name: 'Travel', value: 'Travel' },
+      { name: 'Health', value: 'Health' },
+      { name: 'Gaming', value: 'Gaming' },
+      { name: 'Communication', value: 'Communication' },
+      { name: 'Productivity', value: 'Productivity' },
+      { name: 'Cloud Storage', value: 'Cloud Storage' },
+      { name: 'Security', value: 'Security' },
+      { name: 'MYCATEGORY', value: 'MYCATEGORY' },
       { name: 'Other', value: 'Other' }
     ]
 
@@ -759,12 +792,7 @@ export default defineComponent({
         }))
       } catch (error) {
         console.error('Failed to fetch credentials:', error)
-        toast.add({
-          severity: 'error',
-          summary: 'Error',
-          detail: 'Failed to load credentials',
-          life: 3000
-        })
+        handleError(error, 'Failed to fetch credentials')
       } finally {
         loading.value = false
       }
@@ -772,16 +800,11 @@ export default defineComponent({
 
     const fetchDomains = async () => {
       try {
-        const result = await DomainService.getDomains(0, 1000) // Get all domains
+        const result = await DomainService.getDomains(0, DEFAULTS.LARGE_PAGE_SIZE)
         availableDomains.value = result.domains || []
       } catch (error) {
         console.error('Failed to fetch domains:', error)
-        toast.add({
-          severity: 'error',
-          summary: 'Error',
-          detail: 'Failed to load domains',
-          life: 3000
-        })
+        handleError(error, 'Failed to fetch domains')
       }
     }
 
@@ -818,7 +841,6 @@ export default defineComponent({
     }
 
     const onSort = () => {
-      // When sorting changes, re-fetch with server-side sorting
       fetchCredentials()
     }
 
@@ -869,21 +891,10 @@ export default defineComponent({
         allCredentials.value.unshift(createdCredential)
         applyFilters()
         showCreateCredentialDialog.value = false
-
-        toast.add({
-          severity: 'success',
-          summary: 'Success',
-          detail: 'Credential created successfully',
-          life: 3000
-        })
+        handleSuccess(CREDENTIAL_SUCCESS_MESSAGES.CREATE_CREDENTIAL_SUCCESS)
       } catch (error) {
         console.error('Failed to create credential:', error)
-        toast.add({
-          severity: 'error',
-          summary: 'Error',
-          detail: 'Failed to create credential',
-          life: 3000
-        })
+        handleError(error, 'Credential Creation Failed')
       } finally {
         submitting.value = false
       }
@@ -957,21 +968,10 @@ export default defineComponent({
 
         applyFilters()
         showEditCredentialDialog.value = false
-
-        toast.add({
-          severity: 'success',
-          summary: 'Success',
-          detail: 'Credential updated successfully',
-          life: 3000
-        })
+        handleSuccess(CREDENTIAL_SUCCESS_MESSAGES.UPDATE_CREDENTIAL_SUCCESS)
       } catch (error) {
         console.error('Failed to update credential:', error)
-        toast.add({
-          severity: 'error',
-          summary: 'Error',
-          detail: 'Failed to update credential',
-          life: 3000
-        })
+        handleError(error, 'Credential Update Failed')
       } finally {
         submitting.value = false
       }
@@ -979,8 +979,8 @@ export default defineComponent({
 
     const viewCredential = (credential: Credential) => {
       viewingCredential.id = credential.id
+      viewingCredential.domainId = credential.domainId || ''
 
-      // Fix for website display
       if (credential.domainId) {
         // If credential has a domainId, use the domain name from availableDomains
         const domain = availableDomains.value.find((d) => d.id === credential.domainId)
@@ -1011,12 +1011,7 @@ export default defineComponent({
 
     const copyToClipboard = (text: string) => {
       navigator.clipboard.writeText(text)
-      toast.add({
-        severity: 'info',
-        summary: 'Copied',
-        detail: 'Text copied to clipboard',
-        life: 1500
-      })
+      handleInfo(CREDENTIAL_SUCCESS_MESSAGES.COPY_SUCCESS, 'Copied')
     }
 
     const copyAndMarkUsed = async (text: string, id: string) => {
@@ -1042,6 +1037,7 @@ export default defineComponent({
         applyFilters()
       } catch (error) {
         console.error('Failed to update last used timestamp:', error)
+        handleError(error, CREDENTIAL_ERROR_MESSAGES.UPDATE_LAST_USED_FAILED)
       }
     }
 
@@ -1064,14 +1060,10 @@ export default defineComponent({
         }
 
         applyFilters()
+        handleSuccess(CREDENTIAL_SUCCESS_MESSAGES.TOGGLE_FAVORITE_SUCCESS)
       } catch (error) {
         console.error('Failed to toggle favorite status:', error)
-        toast.add({
-          severity: 'error',
-          summary: 'Error',
-          detail: 'Failed to update favorite status',
-          life: 3000
-        })
+        handleError(error, CREDENTIAL_ERROR_MESSAGES.TOGGLE_FAVORITE_FAILED)
       }
     }
 
@@ -1081,16 +1073,25 @@ export default defineComponent({
 
     const editFromViewDialog = () => {
       showViewCredentialDialog.value = false
-      startEditCredential({
-        id: viewingCredential.id,
-        website: viewingCredential.website,
-        username: viewingCredential.username,
-        email: viewingCredential.email,
-        password: viewingCredential.password,
-        notes: viewingCredential.notes,
-        category: viewingCredential.category,
-        favorite: viewingCredential.favorite
-      } as Credential)
+
+      // Find the full credential object to get all necessary data
+      const fullCredential = allCredentials.value.find((c) => c.id === viewingCredential.id)
+
+      if (fullCredential) {
+        startEditCredential(fullCredential)
+      } else {
+        startEditCredential({
+          id: viewingCredential.id,
+          website: viewingCredential.website,
+          username: viewingCredential.username,
+          email: viewingCredential.email,
+          password: viewingCredential.password,
+          notes: viewingCredential.notes,
+          category: viewingCredential.category,
+          favorite: viewingCredential.favorite,
+          domainId: viewingCredential.domainId
+        } as Credential)
+      }
     }
 
     const closeViewDialog = () => {
@@ -1119,20 +1120,10 @@ export default defineComponent({
           showViewCredentialDialog.value = false
         }
 
-        toast.add({
-          severity: 'success',
-          summary: 'Success',
-          detail: 'Credential deleted successfully',
-          life: 3000
-        })
+        handleSuccess(CREDENTIAL_SUCCESS_MESSAGES.DELETE_CREDENTIAL_SUCCESS)
       } catch (error) {
         console.error('Failed to delete credential:', error)
-        toast.add({
-          severity: 'error',
-          summary: 'Error',
-          detail: 'Failed to delete credential',
-          life: 3000
-        })
+        handleError(error, 'Credential Deletion Failed')
       }
     }
 
@@ -1165,9 +1156,8 @@ export default defineComponent({
     }
 
     const generatePassword = () => {
-      const length = 16
-      const charset =
-        'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+[]{}|;:,.<>?'
+      const length = PASSWORD_SETTINGS.DEFAULT_LENGTH
+      const charset = PASSWORD_SETTINGS.DEFAULT_CHARSET
       let password = ''
 
       for (let i = 0; i < length; i++) {
@@ -1179,9 +1169,8 @@ export default defineComponent({
     }
 
     const generateEditPassword = () => {
-      const length = 16
-      const charset =
-        'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+[]{}|;:,.<>?'
+      const length = PASSWORD_SETTINGS.DEFAULT_LENGTH
+      const charset = PASSWORD_SETTINGS.DEFAULT_CHARSET
       let password = ''
 
       for (let i = 0; i < length; i++) {
@@ -1196,7 +1185,8 @@ export default defineComponent({
       return moment(dateString).format('MMM D, YYYY')
     }
 
-    const getDomainName = (id: string) => {
+    const getDomainName = (id: string | null | undefined) => {
+      if (!id) return ''
       const domain = availableDomains.value.find((d) => d.id === id)
       return domain?.name || ''
     }
@@ -1229,19 +1219,24 @@ export default defineComponent({
     })
 
     onMounted(async () => {
-      await fetchDomains() // Fetch domains first
-      fetchCredentials(0) // Then fetch credentials
+      await fetchDomains()
+      fetchCredentials(0)
     })
 
     return {
+      // Vault data
       vaultName,
       credentials,
+
+      // UI state
       loading,
       submitting,
       showCreateCredentialDialog,
       showEditCredentialDialog,
       showViewCredentialDialog,
       passwordVisible,
+
+      // Filtering and sorting
       showFavoritesOnly,
       sortField,
       sortOrder,
@@ -1249,39 +1244,61 @@ export default defineComponent({
       categoryFilter,
       availableCategories,
       categoryOptions,
+
+      // Form data
       newCredential,
       editCredential,
       viewingCredential,
+
+      // Validation
       v$,
       isFormValid,
       isEditFormValid,
+
+      // CRUD operations
       openCreateCredentialDialog,
       createCredential,
       startEditCredential,
       updateCredential,
       viewCredential,
+      confirmDelete,
+      deleteCredential,
+
+      // Password management
       togglePasswordVisibility,
       copyToClipboard,
       copyAndMarkUsed,
+      generatePassword,
+      generateEditPassword,
+
+      // Favorite handling
       toggleFavorite,
       toggleFavoriteFromView,
+
+      // Dialog management
       editFromViewDialog,
       closeViewDialog,
-      confirmDelete,
-      deleteCredential,
-      goBackToVaults,
       cancelCreate,
       cancelEdit,
+
+      // Navigation
+      goBackToVaults,
+
+      // Helper methods
       formatDate,
       resetCredentialForm,
       resetEditForm,
-      generatePassword,
-      generateEditPassword,
+
+      // Filter actions
       toggleFavoritesFilter,
       onCategoryFilterChange,
+
+      // Table events
       onSort,
       onRowsPerPageChange,
       rows,
+
+      // Domain-related helpers
       availableDomains,
       getDomainName,
       getDomainLogo,
@@ -1449,10 +1466,22 @@ export default defineComponent({
   font-size: 1.1rem;
 }
 
-.form-error {
+.form-error,
+:deep(.p-error) {
   color: var(--red-500, #f44336) !important;
   font-size: 0.875rem;
   margin-top: 0.25rem;
   display: block;
+}
+
+/* Ensure invalid inputs have red border */
+:deep(.p-invalid) {
+  border-color: var(--red-500, #f44336) !important;
+}
+
+.table-header .p-button {
+  width: 4.5rem;
+  height: 2.5rem;
+  padding: 0.5rem;
 }
 </style>

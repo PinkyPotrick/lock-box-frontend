@@ -1,41 +1,47 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <template>
   <div class="domains">
+    <p-toast />
     <h2>Manage Your Domains</h2>
-    <div class="actions">
-      <p-button
-        label="Add Domain"
-        icon="pi pi-plus"
-        @click="showCreateDomainDialog = true"
-      ></p-button>
+
+    <div class="actions-container">
+      <div class="actions">
+        <p-button
+          label="Add Domain"
+          icon="pi pi-plus"
+          @click="showCreateDomainDialog = true"
+        ></p-button>
+      </div>
+
+      <div class="table-header">
+        <p-input-text
+          v-model="filters.global.value"
+          placeholder="Search domains..."
+          class="search-input"
+          @input="onFilterChange"
+        />
+
+        <div class="data-controls">
+          <div class="data-status">
+            <span v-if="initialLoadComplete">{{ totalLoaded }} domains loaded</span>
+            <span v-else>Loading domains...</span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <p-data-table
-      class="data-table-container"
-      :value="domains"
-      :filters="filters"
-      paginator
+      :value="filteredDomains"
+      :paginator="true"
       :rows="rows"
-      :rowsPerPageOptions="[5, 10, 20]"
-      :totalRecords="totalRecords"
+      v-model:first="first"
+      :rowsPerPageOptions="[5, 10, 20, 50]"
+      paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink RowsPerPageDropdown CurrentPageReport"
+      :currentPageReportTemplate="'{first} to {last} of {totalRecords} domains'"
       :loading="loading"
-      :emptyMessage="'No domains found'"
-      v-model:sortField="sortField"
-      v-model:sortOrder="sortOrder"
-      @sort="onSort"
-      paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink RowsPerPageDropdown"
-      @page="onRowsPerPageChange"
+      :emptyMessage="loading ? 'Loading domains...' : 'No domains found'"
+      dataKey="id"
     >
-      <template #header>
-        <div class="table-header">
-          <p-input-text
-            v-model="filters.global.value"
-            placeholder="Search domains..."
-            class="search-input"
-          />
-        </div>
-      </template>
-
       <p-column field="logo" header="">
         <template #body="slotProps">
           <i :class="slotProps.data.logo || 'pi pi-globe'"></i>
@@ -328,29 +334,23 @@
 </template>
 
 <script lang="ts">
+import { DOMAIN_ERROR_MESSAGES, DOMAIN_SUCCESS_MESSAGES, DEFAULTS } from '@/constants/appConstants'
 import { DomainService } from '@/services/domainService'
 import { type Domain } from '@/services/encryption/domainEncryptionService'
+import { useToastService } from '@/services/toastService'
 import { useVuelidate } from '@vuelidate/core'
 import { helpers, maxLength, required, url } from '@vuelidate/validators'
 import moment from 'moment'
 import Tooltip from 'primevue/tooltip'
 import { useConfirm } from 'primevue/useconfirm'
-import { useToast } from 'primevue/usetoast'
-import { computed, defineComponent, onMounted, reactive, ref } from 'vue'
+import { computed, defineComponent, onMounted, reactive, ref, watch } from 'vue'
 
-// Define our own filter match modes
+// Define filter match modes
 const FILTER_MATCH_MODES = {
   CONTAINS: 'contains',
   EQUALS: 'equals',
   STARTS_WITH: 'startsWith',
   ENDS_WITH: 'endsWith'
-}
-
-interface DomainData {
-  name: string
-  url?: string
-  notes?: string
-  logo?: string
 }
 
 export default defineComponent({
@@ -359,36 +359,54 @@ export default defineComponent({
   },
   setup() {
     const confirm = useConfirm()
-    const toast = useToast()
+    const { handleError, handleSuccess, handleWarning, handleInfo } = useToastService()
 
-    // State
-    const domains = ref<Domain[]>([])
-    const totalRecords = ref(0)
+    // Domain data
+    const allDomains = ref<Domain[]>([])
+    const totalLoaded = ref(0)
+
+    // UI state
     const loading = ref(false)
     const submitting = ref(false)
+    const initialLoadComplete = ref(false)
+    const hasMoreData = ref(true)
     const showCreateDomainDialog = ref(false)
     const showEditDomainDialog = ref(false)
     const showViewDomainDialog = ref(false)
 
-    // Sort and filter
-    const sortField = ref('name')
-    const sortOrder = ref(1) // Ascending
+    // Pagination
+    const first = ref(0)
+    const rows = ref(DEFAULTS.PAGE_SIZE)
+
+    // Filtering
     const filters = ref({
       global: { value: null, matchMode: FILTER_MATCH_MODES.CONTAINS }
     })
 
-    // Add a reactive reference for rows per page
-    const rows = ref(10)
+    // Computed property for filtered domains
+    const filteredDomains = computed(() => {
+      const filterValue = filters.value.global.value
+      if (!filterValue) {
+        return allDomains.value
+      }
+
+      const searchLower = String(filterValue).toLowerCase()
+      return allDomains.value.filter(
+        (domain) =>
+          domain.name.toLowerCase().includes(searchLower) ||
+          (domain.url && domain.url.toLowerCase().includes(searchLower))
+      )
+    })
 
     // Form data
-    const newDomain = reactive<DomainData>({
+    const newDomain = reactive({
       name: '',
       url: '',
       notes: '',
       logo: 'pi pi-globe'
     })
 
-    const editDomain = reactive<DomainData & { id?: string }>({
+    const editDomain = reactive({
       id: '',
       name: '',
       url: '',
@@ -408,36 +426,38 @@ export default defineComponent({
     })
 
     // Validation rules
+    const requiredMsg = 'This field is required'
+    const maxLengthMsg = (max: number) => `Maximum ${max} characters allowed`
     const urlValidator = helpers.withMessage('Please enter a valid URL', url)
 
     const rules = {
       newDomain: {
         name: {
-          required: helpers.withMessage('Domain name is required', required),
-          maxLength: helpers.withMessage('Name cannot exceed 50 characters', maxLength(50))
+          required: helpers.withMessage(requiredMsg, required),
+          maxLength: helpers.withMessage(maxLengthMsg(50), maxLength(50))
         },
         url: {
-          required: helpers.withMessage('URL is required', required),
+          required: helpers.withMessage(requiredMsg, required),
           url: urlValidator,
-          maxLength: helpers.withMessage('URL cannot exceed 255 characters', maxLength(255))
+          maxLength: helpers.withMessage(maxLengthMsg(255), maxLength(255))
         },
         notes: {
-          maxLength: helpers.withMessage('Notes cannot exceed 1000 characters', maxLength(1000)),
+          maxLength: helpers.withMessage(maxLengthMsg(1000), maxLength(1000)),
           $autoDirty: true
         }
       },
       editDomain: {
         name: {
-          required: helpers.withMessage('Domain name is required', required),
-          maxLength: helpers.withMessage('Name cannot exceed 50 characters', maxLength(50))
+          required: helpers.withMessage(requiredMsg, required),
+          maxLength: helpers.withMessage(maxLengthMsg(50), maxLength(50))
         },
         url: {
-          required: helpers.withMessage('URL is required', required),
+          required: helpers.withMessage(requiredMsg, required),
           url: urlValidator,
-          maxLength: helpers.withMessage('URL cannot exceed 255 characters', maxLength(255))
+          maxLength: helpers.withMessage(maxLengthMsg(255), maxLength(255))
         },
         notes: {
-          maxLength: helpers.withMessage('Notes cannot exceed 1000 characters', maxLength(1000)),
+          maxLength: helpers.withMessage(maxLengthMsg(1000), maxLength(1000)),
           $autoDirty: true
         }
       }
@@ -457,61 +477,46 @@ export default defineComponent({
       { name: 'Database', value: 'pi pi-database' }
     ]
 
+    // Computed properties for form validation
     const isFormValid = computed(() => {
-      return (
-        newDomain.name &&
-        newDomain.name.length <= 50 &&
-        newDomain.url &&
-        (!newDomain.notes || newDomain.notes.length <= 1000)
-      )
+      return !v$.value.newDomain.$invalid && newDomain.name && newDomain.url
     })
 
     const isEditFormValid = computed(() => {
-      return (
-        editDomain.name &&
-        editDomain.name.length <= 50 &&
-        editDomain.url &&
-        (!editDomain.notes || editDomain.notes.length <= 1000)
-      )
+      return !v$.value.editDomain.$invalid && editDomain.name && editDomain.url
     })
 
-    // Methods
-    const fetchDomains = async (page = 0) => {
+    // Load domains in a single request
+    const fetchDomains = async () => {
       loading.value = true
+      initialLoadComplete.value = false
+
       try {
-        const result = await DomainService.getDomains(
-          page,
-          rows.value, // Use the reactive rows value
-          sortField.value,
-          sortOrder.value === 1 ? 'asc' : 'desc'
-        )
-        domains.value = result.domains
-        totalRecords.value = result.totalCount
+        const result = await DomainService.getDomains(0, DEFAULTS.LARGE_PAGE_SIZE)
+        allDomains.value = result.domains
+        totalLoaded.value = allDomains.value.length
+        hasMoreData.value = false
+        initialLoadComplete.value = true
       } catch (error) {
         console.error('Failed to fetch domains:', error)
-        toast.add({
-          severity: 'error',
-          summary: 'Error',
-          detail: 'Failed to load domains',
-          life: 3000
-        })
-        domains.value = []
-        totalRecords.value = 0
+        handleError(error, DOMAIN_ERROR_MESSAGES.FETCH_DOMAINS_FAILED)
       } finally {
         loading.value = false
       }
     }
 
-    const onSort = () => {
-      fetchDomains()
-    }
-
-    // Add handler for rows per page change
-    const onRowsPerPageChange = (event: { rows: number }) => {
+    // Event handlers
+    const onPageChange = (event: any) => {
+      first.value = event.first
       rows.value = event.rows
-      fetchDomains(0) // Reset to first page when changing page size
     }
 
+    const onFilterChange = (event: any) => {
+      filters.value.global.value = event.target.value
+      first.value = 0
+    }
+
+    // CRUD operations
     const createDomain = async () => {
       v$.value.newDomain.$touch()
       if (v$.value.newDomain.$invalid) return
@@ -519,24 +524,13 @@ export default defineComponent({
       submitting.value = true
       try {
         const newDomainData = await DomainService.createNewDomain(newDomain)
-        domains.value.unshift(newDomainData)
-        totalRecords.value++
-        resetNewDomain()
+        allDomains.value.unshift(newDomainData)
+        totalLoaded.value = allDomains.value.length
         showCreateDomainDialog.value = false
-        toast.add({
-          severity: 'success',
-          summary: 'Success',
-          detail: 'Domain created successfully',
-          life: 3000
-        })
+        handleSuccess(DOMAIN_SUCCESS_MESSAGES.CREATE_DOMAIN_SUCCESS)
       } catch (error) {
         console.error('Failed to create domain:', error)
-        toast.add({
-          severity: 'error',
-          summary: 'Error',
-          detail: 'Failed to create domain',
-          life: 3000
-        })
+        handleError(error, DOMAIN_ERROR_MESSAGES.CREATE_DOMAIN_FAILED)
       } finally {
         submitting.value = false
       }
@@ -564,9 +558,10 @@ export default defineComponent({
           logo: editDomain.logo
         })
 
-        const index = domains.value.findIndex((d) => d.id === updatedDomain.id)
+        // Update in our loaded arrays
+        const index = allDomains.value.findIndex((d) => d.id === updatedDomain.id)
         if (index !== -1) {
-          domains.value[index] = updatedDomain
+          allDomains.value[index] = updatedDomain
         }
 
         // If domain is currently being viewed, update the view as well
@@ -581,20 +576,10 @@ export default defineComponent({
         }
 
         showEditDomainDialog.value = false
-        toast.add({
-          severity: 'success',
-          summary: 'Success',
-          detail: 'Domain updated successfully',
-          life: 3000
-        })
+        handleSuccess(DOMAIN_SUCCESS_MESSAGES.UPDATE_DOMAIN_SUCCESS)
       } catch (error) {
         console.error('Failed to update domain:', error)
-        toast.add({
-          severity: 'error',
-          summary: 'Error',
-          detail: 'Failed to update domain',
-          life: 3000
-        })
+        handleError(error, DOMAIN_ERROR_MESSAGES.UPDATE_DOMAIN_FAILED)
       } finally {
         submitting.value = false
       }
@@ -606,7 +591,7 @@ export default defineComponent({
       viewingDomain.url = domain.url || ''
       viewingDomain.notes = domain.notes || ''
       viewingDomain.logo = domain.logo || 'pi pi-globe'
-      viewingDomain.credentialCount = domain.credentialCount
+      viewingDomain.credentialCount = domain.credentialCount || 0
       viewingDomain.createdAt = domain.createdAt
       viewingDomain.updatedAt = domain.updatedAt
 
@@ -614,13 +599,11 @@ export default defineComponent({
     }
 
     const confirmDelete = (domain: Domain) => {
-      if (domain.credentialCount > 0) {
-        toast.add({
-          severity: 'warn',
-          summary: 'Cannot Delete',
-          detail: `Domain "${domain.name}" has ${domain.credentialCount} credentials and cannot be deleted.`,
-          life: 3000
-        })
+      if (domain.credentialCount && domain.credentialCount > 0) {
+        handleWarning(
+          `Domain "${domain.name}" has ${domain.credentialCount} credentials and cannot be deleted.`,
+          'Cannot Delete'
+        )
         return
       }
 
@@ -636,31 +619,24 @@ export default defineComponent({
     const deleteDomain = async (id: string) => {
       try {
         await DomainService.deleteDomain(id)
-        domains.value = domains.value.filter((d) => d.id !== id)
-        totalRecords.value--
+
+        // Remove from our loaded arrays
+        allDomains.value = allDomains.value.filter((d) => d.id !== id)
+        totalLoaded.value = allDomains.value.length
 
         // Close view dialog if the deleted domain is currently being viewed
         if (viewingDomain.id === id) {
           showViewDomainDialog.value = false
         }
 
-        toast.add({
-          severity: 'success',
-          summary: 'Success',
-          detail: 'Domain deleted successfully',
-          life: 3000
-        })
+        handleSuccess(DOMAIN_SUCCESS_MESSAGES.DELETE_DOMAIN_SUCCESS)
       } catch (error) {
         console.error('Failed to delete domain:', error)
-        toast.add({
-          severity: 'error',
-          summary: 'Error',
-          detail: 'Failed to delete domain',
-          life: 3000
-        })
+        handleError(error, DOMAIN_ERROR_MESSAGES.DELETE_DOMAIN_FAILED)
       }
     }
 
+    // Helper functions
     const openUrl = (urlStr: string) => {
       if (!urlStr) return
 
@@ -673,12 +649,7 @@ export default defineComponent({
       if (!text) return
 
       navigator.clipboard.writeText(text)
-      toast.add({
-        severity: 'info',
-        summary: 'Copied',
-        detail: 'Copied to clipboard',
-        life: 1500
-      })
+      handleInfo(DOMAIN_SUCCESS_MESSAGES.COPY_SUCCESS, 'Copied')
     }
 
     const resetNewDomain = () => {
@@ -727,38 +698,63 @@ export default defineComponent({
       return option ? option.name : 'Logo'
     }
 
+    // Watch for filter changes to reset pagination
+    watch(
+      () => filters.value.global.value,
+      () => {
+        first.value = 0
+      }
+    )
+
+    // Initialize data when component mounts
     onMounted(() => {
       fetchDomains()
     })
 
     return {
-      domains,
-      totalRecords,
+      // Data
+      filteredDomains,
+      allDomains,
+      totalLoaded,
+
+      // UI state
       loading,
       submitting,
+      initialLoadComplete,
+      hasMoreData,
       showCreateDomainDialog,
       showEditDomainDialog,
       showViewDomainDialog,
-      sortField,
-      sortOrder,
-      filters,
+
+      // Pagination and filtering
+      first,
       rows,
+      filters,
+
+      // Form data
       newDomain,
       editDomain,
       viewingDomain,
       logoOptions,
+
+      // Validation
       v$,
       isFormValid,
       isEditFormValid,
-      fetchDomains,
+
+      // Event handlers
+      onPageChange,
+      onFilterChange,
+
+      // CRUD operations
       createDomain,
       startEditDomain,
       updateDomain,
       viewDomain,
       confirmDelete,
       deleteDomain,
-      onSort,
-      onRowsPerPageChange,
+
+      // Helper methods
       openUrl,
       copyToClipboard,
       cancelCreate,
@@ -766,7 +762,13 @@ export default defineComponent({
       editFromViewDialog,
       closeViewDialog,
       formatDate,
-      getLogoName
+      getLogoName,
+
+      // Toast services
+      handleError,
+      handleSuccess,
+      handleWarning,
+      handleInfo
     }
   }
 })
@@ -777,8 +779,11 @@ export default defineComponent({
   padding: 1rem 2rem;
 }
 
-.actions {
+.actions-container {
   margin-bottom: 1rem;
+}
+
+.actions {
   display: flex;
   justify-content: flex-end;
 }
@@ -793,6 +798,17 @@ export default defineComponent({
 .search-input {
   width: 100%;
   max-width: 300px;
+}
+
+.data-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.data-status {
+  font-size: 0.875rem;
+  color: var(--text-color-secondary);
 }
 
 .dialog-content {
@@ -811,7 +827,6 @@ export default defineComponent({
   font-weight: 500;
 }
 
-/* Ensure inputs expand properly */
 :deep(.p-inputtext),
 :deep(.p-textarea) {
   width: 100%;
@@ -825,7 +840,6 @@ export default defineComponent({
   width: 100%;
 }
 
-/* Ensure textarea expands properly */
 :deep(.p-textarea) {
   width: 100%;
 }
@@ -835,23 +849,16 @@ export default defineComponent({
   min-height: 100px;
 }
 
-.p-button {
-  margin-right: 0.5rem;
-}
-
-/* Fix icon display in dropdown */
 .icon-option {
   display: inline-flex;
   align-items: center;
 }
 
-/* Add spacing between icon and text in dropdown options */
 .icon-option i {
   margin-right: 12px;
   font-size: 1.1rem;
 }
 
-/* Domain detail view styling */
 .domain-detail {
   margin-bottom: 1rem;
 }
@@ -880,7 +887,6 @@ export default defineComponent({
   padding: 0.25rem;
 }
 
-/* Table styling */
 :deep(.p-column-header-content) {
   justify-content: flex-start;
   padding-left: 1rem;
@@ -905,7 +911,6 @@ export default defineComponent({
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-/* Dialog styling */
 :deep(.p-dialog-content) {
   padding: 1.5rem;
 }
@@ -914,7 +919,6 @@ export default defineComponent({
   padding: 1rem 1.5rem;
 }
 
-/* Select component styling */
 :deep(.p-select-label) {
   display: flex !important;
   align-items: center !important;
@@ -949,7 +953,6 @@ export default defineComponent({
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-/* Add specific styling for form error messages */
 .form-error {
   color: var(--red-500, #f44336) !important;
   font-size: 0.875rem;
@@ -957,15 +960,7 @@ export default defineComponent({
   display: block;
 }
 
-/* Add a style to highlight invalid inputs */
 :deep(.p-invalid) {
   border-color: var(--red-500, #f44336) !important;
 }
-
-/* Ensure error messages transition smoothly */
-.form-error {
-  transition: all 0.2s ease;
-  opacity: 1;
-}
 </style>
-```

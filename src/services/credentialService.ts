@@ -1,6 +1,15 @@
 import axios from '@/axios-config'
 import { API_PATHS } from '@/constants/apiPaths'
+import {
+  CREDENTIAL_CATEGORIES,
+  CREDENTIAL_ERROR_MESSAGES,
+  DEFAULTS,
+  ERROR_TYPES,
+  GENERIC_ERROR_MESSAGES,
+  HTTP_STATUS
+} from '@/constants/appConstants'
 import { getAuthToken } from '@/stores/authStore'
+import { ApiError, ApiErrorService } from './apiErrorService'
 import {
   CredentialEncryptionService,
   type Credential,
@@ -12,6 +21,8 @@ import {
  * Service for handling credential operations
  */
 export class CredentialService {
+  // Validation constants - we should also move these to appConstants.ts in a future refactor
+
   /**
    * Fetches all credentials for a vault with pagination
    * @param vaultId Vault ID
@@ -24,27 +35,44 @@ export class CredentialService {
   static async fetchCredentials(
     vaultId: string,
     page = 0,
-    size = 10,
+    size = DEFAULTS.PAGE_SIZE,
     sort?: string,
-    direction?: string
+    direction: string = DEFAULTS.DEFAULT_SORT_DIRECTION
   ) {
     const token = getAuthToken()
 
     if (!token) {
-      throw new Error('Authentication token is missing')
+      throw new ApiError(
+        GENERIC_ERROR_MESSAGES.AUTH_TOKEN_MISSING,
+        HTTP_STATUS.UNAUTHORIZED,
+        ERROR_TYPES.AUTH_ERROR
+      )
     }
 
-    const response = await axios.get<{ item: CredentialListResponse }>(
-      `${API_PATHS.VAULTS.BASE}/${vaultId}/credentials`,
-      {
+    try {
+      const response = await axios.get<{
+        item: CredentialListResponse
+        success: boolean
+        message?: string
+      }>(`${API_PATHS.VAULTS.BASE}/${vaultId}/credentials`, {
         params: { page, size, sort, direction },
         headers: {
           Authorization: `Bearer ${token}`
         }
-      }
-    )
+      })
 
-    return response?.data?.item
+      if (response.data && !response.data.success) {
+        throw new ApiError(
+          response.data.message || CREDENTIAL_ERROR_MESSAGES.FETCH_CREDENTIALS_FAILED,
+          HTTP_STATUS.BAD_REQUEST,
+          ERROR_TYPES.API_ERROR
+        )
+      }
+
+      return response?.data?.item
+    } catch (error) {
+      throw ApiErrorService.handleError(error)
+    }
   }
 
   /**
@@ -57,19 +85,36 @@ export class CredentialService {
     const token = getAuthToken()
 
     if (!token) {
-      throw new Error('Authentication token is missing')
+      throw new ApiError(
+        GENERIC_ERROR_MESSAGES.AUTH_TOKEN_MISSING,
+        HTTP_STATUS.UNAUTHORIZED,
+        ERROR_TYPES.AUTH_ERROR
+      )
     }
 
-    const response = await axios.get<{ item: CredentialResponse }>(
-      `${API_PATHS.VAULTS.BASE}/${vaultId}/credentials/${id}`,
-      {
+    try {
+      const response = await axios.get<{
+        item: CredentialResponse
+        success: boolean
+        message?: string
+      }>(`${API_PATHS.VAULTS.BASE}/${vaultId}/credentials/${id}`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
-      }
-    )
+      })
 
-    return response?.data?.item
+      if (response.data && !response.data.success) {
+        throw new ApiError(
+          response.data.message || `${CREDENTIAL_ERROR_MESSAGES.FETCH_CREDENTIALS_FAILED} ${id}`,
+          HTTP_STATUS.BAD_REQUEST,
+          ERROR_TYPES.API_ERROR
+        )
+      }
+
+      return response?.data?.item
+    } catch (error) {
+      throw ApiErrorService.handleError(error)
+    }
   }
 
   /**
@@ -93,27 +138,59 @@ export class CredentialService {
     const token = getAuthToken()
 
     if (!token) {
-      throw new Error('Authentication token is missing')
+      throw new ApiError(
+        GENERIC_ERROR_MESSAGES.AUTH_TOKEN_MISSING,
+        HTTP_STATUS.UNAUTHORIZED,
+        ERROR_TYPES.AUTH_ERROR
+      )
     }
 
-    // Encrypt the credential data
-    const encryptedData = await CredentialEncryptionService.encryptCredentialData(
-      credentialData,
-      vaultId
-    )
+    // Validate category if provided
+    if (credentialData.category && !CREDENTIAL_CATEGORIES.includes(credentialData.category)) {
+      throw new ApiError(
+        CREDENTIAL_ERROR_MESSAGES.INVALID_CATEGORY.replace(
+          '{categories}',
+          CREDENTIAL_CATEGORIES.join(', ')
+        ),
+        HTTP_STATUS.BAD_REQUEST,
+        ERROR_TYPES.VALIDATION_ERROR
+      )
+    }
 
-    // Send to server
-    const response = await axios.post<{ item: CredentialResponse }>(
-      `${API_PATHS.VAULTS.BASE}/${vaultId}/credentials`,
-      encryptedData,
-      {
+    try {
+      // Encrypt the credential data
+      const encryptedData = await CredentialEncryptionService.encryptCredentialData(
+        credentialData,
+        vaultId
+      )
+
+      // Send to server
+      const response = await axios.post<{
+        item: CredentialResponse
+        success: boolean
+        message?: string
+        statusCode?: number
+        errorType?: string
+        timestamp?: any
+      }>(`${API_PATHS.VAULTS.BASE}/${vaultId}/credentials`, encryptedData, {
         headers: {
           Authorization: `Bearer ${token}`
         }
-      }
-    )
+      })
 
-    return response?.data?.item
+      if (response.data && !response.data.success) {
+        throw new ApiError(
+          response.data.message || CREDENTIAL_ERROR_MESSAGES.CREATE_CREDENTIAL_FAILED,
+          response.data.statusCode || HTTP_STATUS.BAD_REQUEST,
+          response.data.errorType || ERROR_TYPES.API_ERROR,
+          response.data.timestamp
+        )
+      }
+
+      return response?.data?.item
+    } catch (error) {
+      throw ApiErrorService.handleError(error)
+    }
   }
 
   /**
@@ -139,27 +216,59 @@ export class CredentialService {
     const token = getAuthToken()
 
     if (!token) {
-      throw new Error('Authentication token is missing')
+      throw new ApiError(
+        GENERIC_ERROR_MESSAGES.AUTH_TOKEN_MISSING,
+        HTTP_STATUS.UNAUTHORIZED,
+        ERROR_TYPES.AUTH_ERROR
+      )
     }
 
-    // Encrypt the credential data
-    const encryptedData = await CredentialEncryptionService.encryptCredentialData(
-      credentialData,
-      vaultId
-    )
+    // Validate category if provided
+    if (credentialData.category && !CREDENTIAL_CATEGORIES.includes(credentialData.category)) {
+      throw new ApiError(
+        CREDENTIAL_ERROR_MESSAGES.INVALID_CATEGORY.replace(
+          '{categories}',
+          CREDENTIAL_CATEGORIES.join(', ')
+        ),
+        HTTP_STATUS.BAD_REQUEST,
+        ERROR_TYPES.VALIDATION_ERROR
+      )
+    }
 
-    // Send to server
-    const response = await axios.put<{ item: CredentialResponse }>(
-      `${API_PATHS.VAULTS.BASE}/${vaultId}/credentials/${id}`,
-      encryptedData,
-      {
+    try {
+      // Encrypt the credential data
+      const encryptedData = await CredentialEncryptionService.encryptCredentialData(
+        credentialData,
+        vaultId
+      )
+
+      // Send to server
+      const response = await axios.put<{
+        item: CredentialResponse
+        success: boolean
+        message?: string
+        statusCode?: number
+        errorType?: string
+        timestamp?: any
+      }>(`${API_PATHS.VAULTS.BASE}/${vaultId}/credentials/${id}`, encryptedData, {
         headers: {
           Authorization: `Bearer ${token}`
         }
-      }
-    )
+      })
 
-    return response?.data?.item
+      if (response.data && !response.data.success) {
+        throw new ApiError(
+          response.data.message || `${CREDENTIAL_ERROR_MESSAGES.UPDATE_CREDENTIAL_FAILED} ${id}`,
+          response.data.statusCode || HTTP_STATUS.BAD_REQUEST,
+          response.data.errorType || ERROR_TYPES.API_ERROR,
+          response.data.timestamp
+        )
+      }
+
+      return response?.data?.item
+    } catch (error) {
+      throw ApiErrorService.handleError(error)
+    }
   }
 
   /**
@@ -172,16 +281,37 @@ export class CredentialService {
     const token = getAuthToken()
 
     if (!token) {
-      throw new Error('Authentication token is missing')
+      throw new ApiError(
+        GENERIC_ERROR_MESSAGES.AUTH_TOKEN_MISSING,
+        HTTP_STATUS.UNAUTHORIZED,
+        ERROR_TYPES.AUTH_ERROR
+      )
     }
 
-    const response = await axios.delete(`${API_PATHS.VAULTS.BASE}/${vaultId}/credentials/${id}`, {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    })
+    try {
+      const response = await axios.delete<{
+        success: boolean
+        message?: string
+        statusCode?: number
+        errorType?: string
+      }>(`${API_PATHS.VAULTS.BASE}/${vaultId}/credentials/${id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      })
 
-    return response?.data
+      if (response.data && !response.data.success) {
+        throw new ApiError(
+          response.data.message || `${CREDENTIAL_ERROR_MESSAGES.DELETE_CREDENTIAL_FAILED} ${id}`,
+          response.data.statusCode || HTTP_STATUS.BAD_REQUEST,
+          response.data.errorType || ERROR_TYPES.API_ERROR
+        )
+      }
+
+      return response?.data
+    } catch (error) {
+      throw ApiErrorService.handleError(error)
+    }
   }
 
   /**
@@ -194,20 +324,36 @@ export class CredentialService {
     const token = getAuthToken()
 
     if (!token) {
-      throw new Error('Authentication token is missing')
+      throw new ApiError(
+        GENERIC_ERROR_MESSAGES.AUTH_TOKEN_MISSING,
+        HTTP_STATUS.UNAUTHORIZED,
+        ERROR_TYPES.AUTH_ERROR
+      )
     }
 
-    const response = await axios.put<{ item: CredentialResponse }>(
-      `${API_PATHS.VAULTS.BASE}/${vaultId}/credentials/${id}/favorite`,
-      null,
-      {
+    try {
+      const response = await axios.put<{
+        item: CredentialResponse
+        success: boolean
+        message?: string
+      }>(`${API_PATHS.VAULTS.BASE}/${vaultId}/credentials/${id}/favorite`, null, {
         headers: {
           Authorization: `Bearer ${token}`
         }
-      }
-    )
+      })
 
-    return response?.data?.item
+      if (response.data && !response.data.success) {
+        throw new ApiError(
+          response.data.message || `${CREDENTIAL_ERROR_MESSAGES.TOGGLE_FAVORITE_FAILED} ${id}`,
+          HTTP_STATUS.BAD_REQUEST,
+          ERROR_TYPES.API_ERROR
+        )
+      }
+
+      return response?.data?.item
+    } catch (error) {
+      throw ApiErrorService.handleError(error)
+    }
   }
 
   /**
@@ -220,20 +366,36 @@ export class CredentialService {
     const token = getAuthToken()
 
     if (!token) {
-      throw new Error('Authentication token is missing')
+      throw new ApiError(
+        GENERIC_ERROR_MESSAGES.AUTH_TOKEN_MISSING,
+        HTTP_STATUS.UNAUTHORIZED,
+        ERROR_TYPES.AUTH_ERROR
+      )
     }
 
-    const response = await axios.put<{ item: CredentialResponse }>(
-      `${API_PATHS.VAULTS.BASE}/${vaultId}/credentials/${id}/used`,
-      null,
-      {
+    try {
+      const response = await axios.put<{
+        item: CredentialResponse
+        success: boolean
+        message?: string
+      }>(`${API_PATHS.VAULTS.BASE}/${vaultId}/credentials/${id}/used`, null, {
         headers: {
           Authorization: `Bearer ${token}`
         }
-      }
-    )
+      })
 
-    return response?.data?.item
+      if (response.data && !response.data.success) {
+        throw new ApiError(
+          response.data.message || `${CREDENTIAL_ERROR_MESSAGES.UPDATE_LAST_USED_FAILED} ${id}`,
+          HTTP_STATUS.BAD_REQUEST,
+          ERROR_TYPES.API_ERROR
+        )
+      }
+
+      return response?.data?.item
+    } catch (error) {
+      throw ApiErrorService.handleError(error)
+    }
   }
 
   /**
@@ -248,9 +410,9 @@ export class CredentialService {
   static async getCredentials(
     vaultId: string,
     page = 0,
-    size = 10,
+    size = DEFAULTS.PAGE_SIZE,
     sort?: string,
-    direction?: string
+    direction: string = DEFAULTS.DEFAULT_SORT_DIRECTION
   ) {
     try {
       const response = await this.fetchCredentials(vaultId, page, size, sort, direction)
@@ -261,21 +423,33 @@ export class CredentialService {
           response.credentials
         )
 
+        // Decrypt vault name if provided in the new format
+        let vaultName = ''
+        if (response.encryptedVaultName && response.helperVaultNameAesKey) {
+          vaultName = CredentialEncryptionService.decryptVaultName(
+            response.encryptedVaultName,
+            response.helperVaultNameAesKey
+          )
+        } else {
+          // Fallback to the old format or a default
+          vaultName = response.vaultName || 'Vault'
+        }
+
         return {
           credentials: decryptedCredentials,
           totalCount: response.totalCount,
-          vaultName: response.vaultName
+          vaultName: vaultName
         }
       }
 
       return {
         credentials: [],
         totalCount: 0,
-        vaultName: ''
+        vaultName: 'Vault'
       }
     } catch (error) {
-      console.error('Failed to fetch credentials:', error)
-      throw error
+      console.error(CREDENTIAL_ERROR_MESSAGES.FETCH_CREDENTIALS_FAILED, error)
+      throw ApiErrorService.handleError(error)
     }
   }
 
@@ -288,10 +462,19 @@ export class CredentialService {
   static async getCredentialById(vaultId: string, id: string): Promise<Credential> {
     try {
       const response = await this.fetchCredentialById(vaultId, id)
+
+      if (!response) {
+        throw new ApiError(
+          CREDENTIAL_ERROR_MESSAGES.CREDENTIAL_NOT_FOUND.replace('{id}', id),
+          HTTP_STATUS.NOT_FOUND,
+          ERROR_TYPES.NOT_FOUND_ERROR
+        )
+      }
+
       return CredentialEncryptionService.decryptCredential(response)
     } catch (error) {
-      console.error(`Failed to fetch credential with ID ${id}:`, error)
-      throw error
+      console.error(`${CREDENTIAL_ERROR_MESSAGES.FETCH_CREDENTIALS_FAILED} ${id}:`, error)
+      throw ApiErrorService.handleError(error)
     }
   }
 
@@ -315,10 +498,19 @@ export class CredentialService {
   ): Promise<Credential> {
     try {
       const response = await this.createCredential(vaultId, credentialData)
+
+      if (!response) {
+        throw new ApiError(
+          GENERIC_ERROR_MESSAGES.INVALID_SERVER_RESPONSE,
+          HTTP_STATUS.INTERNAL_SERVER_ERROR,
+          ERROR_TYPES.API_ERROR
+        )
+      }
+
       return CredentialEncryptionService.decryptCredential(response)
     } catch (error) {
-      console.error('Failed to create credential:', error)
-      throw error
+      console.error(CREDENTIAL_ERROR_MESSAGES.CREATE_CREDENTIAL_FAILED, error)
+      throw ApiErrorService.handleError(error)
     }
   }
 
@@ -344,10 +536,19 @@ export class CredentialService {
   ): Promise<Credential> {
     try {
       const response = await this.updateCredential(vaultId, id, credentialData)
+
+      if (!response) {
+        throw new ApiError(
+          `${CREDENTIAL_ERROR_MESSAGES.UPDATE_CREDENTIAL_FAILED} ${id}`,
+          HTTP_STATUS.INTERNAL_SERVER_ERROR,
+          ERROR_TYPES.API_ERROR
+        )
+      }
+
       return CredentialEncryptionService.decryptCredential(response)
     } catch (error) {
-      console.error(`Failed to update credential with ID ${id}:`, error)
-      throw error
+      console.error(`${CREDENTIAL_ERROR_MESSAGES.UPDATE_CREDENTIAL_FAILED} ${id}:`, error)
+      throw ApiErrorService.handleError(error)
     }
   }
 
@@ -360,10 +561,19 @@ export class CredentialService {
   static async toggleCredentialFavorite(vaultId: string, id: string): Promise<Credential> {
     try {
       const response = await this.toggleFavorite(vaultId, id)
+
+      if (!response) {
+        throw new ApiError(
+          `${CREDENTIAL_ERROR_MESSAGES.TOGGLE_FAVORITE_FAILED} ${id}`,
+          HTTP_STATUS.INTERNAL_SERVER_ERROR,
+          ERROR_TYPES.API_ERROR
+        )
+      }
+
       return CredentialEncryptionService.decryptCredential(response)
     } catch (error) {
-      console.error(`Failed to toggle favorite status for credential ${id}:`, error)
-      throw error
+      console.error(`${CREDENTIAL_ERROR_MESSAGES.TOGGLE_FAVORITE_FAILED} ${id}:`, error)
+      throw ApiErrorService.handleError(error)
     }
   }
 
@@ -376,10 +586,36 @@ export class CredentialService {
   static async updateCredentialLastUsed(vaultId: string, id: string): Promise<Credential> {
     try {
       const response = await this.updateLastUsed(vaultId, id)
+
+      if (!response) {
+        throw new ApiError(
+          `${CREDENTIAL_ERROR_MESSAGES.UPDATE_LAST_USED_FAILED} ${id}`,
+          HTTP_STATUS.INTERNAL_SERVER_ERROR,
+          ERROR_TYPES.API_ERROR
+        )
+      }
+
       return CredentialEncryptionService.decryptCredential(response)
     } catch (error) {
-      console.error(`Failed to update last used timestamp for credential ${id}:`, error)
-      throw error
+      console.error(`${CREDENTIAL_ERROR_MESSAGES.UPDATE_LAST_USED_FAILED} ${id}:`, error)
+      throw ApiErrorService.handleError(error)
+    }
+  }
+
+  /**
+   * Gets all credentials for a vault without pagination
+   * Used for exports and backups
+   * @param vaultId Vault ID
+   * @returns All decrypted credentials for the vault
+   */
+  static async getAllCredentialsForVault(vaultId: string): Promise<Credential[]> {
+    try {
+      // Use a large page size to get all credentials
+      const result = await this.getCredentials(vaultId, 0, DEFAULTS.LARGE_PAGE_SIZE)
+      return result.credentials
+    } catch (error) {
+      console.error(`Failed to get all credentials for vault ${vaultId}:`, error)
+      throw ApiErrorService.handleError(error)
     }
   }
 }

@@ -7,7 +7,8 @@ export const API_PATHS = {
     LOGOUT: '/api/auth/logout'
   },
   USERS: {
-    PROFILE: '/api/users/profile'
+    PROFILE: '/api/users/profile',
+    CHANGE_PASSWORD: '/api/users/change-password'
   },
   DASHBOARD: {
     OVERVIEW: '/api/dashboard/overview',

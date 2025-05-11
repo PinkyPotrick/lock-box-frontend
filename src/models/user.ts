@@ -1,5 +1,6 @@
 export interface User {
   username: string
-  email: string
-  createdAt: string
+  email?: string
+  createdAt: string | Date
+  updatedAt?: string | Date
 }

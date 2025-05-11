@@ -1,10 +1,11 @@
-import { useToast } from 'primevue/usetoast'
 import {
   TOAST_LIFE_ERROR,
-  TOAST_LIFE_WARNING,
+  TOAST_LIFE_INFO,
   TOAST_LIFE_SUCCESS,
-  TOAST_LIFE_INFO
+  TOAST_LIFE_WARNING
 } from '@/constants/appConstants'
+import { useToast } from 'primevue/usetoast'
+import { ApiErrorService } from './apiErrorService'
 
 /**
  * Composable for handling toast notifications
@@ -18,16 +19,8 @@ export function useToastService() {
    * @param summary Optional custom summary text
    */
   const handleError = (error: any, summary = 'Error') => {
-    let errorMessage = 'An unknown error occurred.'
-
-    if (error?.response?.data?.error) {
-      errorMessage = error.response.data.error
-    } else if (error?.message) {
-      errorMessage = error.message
-    } else if (typeof error === 'string') {
-      errorMessage = error
-    }
-
+    // Use ApiErrorService to extract error details
+    const errorMessage = ApiErrorService.getErrorMessage(error)
     console.error('Error:', error)
 
     toast.add({
@@ -36,6 +29,12 @@ export function useToastService() {
       detail: errorMessage,
       life: TOAST_LIFE_ERROR
     })
+
+    // If it's an auth error, you might want to redirect to login or show a special message
+    if (ApiErrorService.isAuthError(error)) {
+      // Handle auth errors specifically if needed
+      console.warn('Authentication error detected')
+    }
   }
 
   /**

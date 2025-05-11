@@ -1,7 +1,13 @@
 import { useAuthStore } from '@/stores/authStore'
 import { bigIntFromBytes } from '@/utils/dataTypesUtils'
 import { getCookies } from '@/utils/cookiesUtils'
-import { AUTH } from '@/constants/appConstants'
+import {
+  AUTH,
+  ERROR_TYPES,
+  GENERIC_ERROR_MESSAGES,
+  HTTP_STATUS,
+  AUTH_ERROR_MESSAGES
+} from '@/constants/appConstants'
 import { API_PATHS } from '@/constants/apiPaths'
 import {
   generateAESKey,
@@ -27,6 +33,7 @@ import { RegistrationEncryptionService } from './encryption/registrationEncrypti
 import { LoginEncryptionService } from './encryption/loginEncryptionService'
 import axios from '@/axios-config'
 import forge from 'node-forge'
+import { ApiError, ApiErrorService } from './apiErrorService'
 
 /**
  * Prepares user credentials for secure authentication
@@ -50,8 +57,28 @@ const prepareUserCredentials = (username: string, password: string) => {
  * @returns encrypted AES session token { encryptedSessionToken, helperAesKey }
  */
 const registerUser = async (data: object) => {
-  const response = await axios.post(API_PATHS.AUTH.REGISTER, data)
-  return response?.data?.item
+  try {
+    const response = await axios.post<{
+      item: any
+      success: boolean
+      message?: string
+      statusCode?: number
+      errorType?: string
+    }>(API_PATHS.AUTH.REGISTER, data)
+
+    if (response.data && !response.data.success) {
+      throw new ApiError(
+        response.data.message || AUTH_ERROR_MESSAGES.REGISTRATION_FAILED,
+        response.data.statusCode || HTTP_STATUS.BAD_REQUEST,
+        response.data.errorType || ERROR_TYPES.API_ERROR
+      )
+    }
+
+    return response?.data?.item
+  } catch (error) {
+    console.error(AUTH_ERROR_MESSAGES.REGISTRATION_FAILED, error)
+    throw ApiErrorService.handleError(error)
+  }
 }
 
 /**
@@ -62,8 +89,28 @@ const registerUser = async (data: object) => {
  *          encryptedServerPublicValueB, helperAesKey }
  */
 const fetchSrpParams = async (data: object) => {
-  const response = await axios.post(API_PATHS.AUTH.SRP_PARAMS, data)
-  return response?.data?.item
+  try {
+    const response = await axios.post<{
+      item: any
+      success: boolean
+      message?: string
+      statusCode?: number
+      errorType?: string
+    }>(API_PATHS.AUTH.SRP_PARAMS, data)
+
+    if (response.data && !response.data.success) {
+      throw new ApiError(
+        response.data.message || AUTH_ERROR_MESSAGES.SRP_PARAMS_FAILED,
+        response.data.statusCode || HTTP_STATUS.BAD_REQUEST,
+        response.data.errorType || ERROR_TYPES.API_ERROR
+      )
+    }
+
+    return response?.data?.item
+  } catch (error) {
+    console.error(AUTH_ERROR_MESSAGES.SRP_PARAMS_FAILED, error)
+    throw ApiErrorService.handleError(error)
+  }
 }
 
 /**
@@ -72,8 +119,28 @@ const fetchSrpParams = async (data: object) => {
  * @returns encrypted AES server proof and session token { encryptedM2, encryptedSessionToken, helperAesKey }
  */
 const authenticateUser = async (data: object) => {
-  const response = await axios.post(API_PATHS.AUTH.SRP_AUTHENTICATE, data)
-  return response?.data?.item
+  try {
+    const response = await axios.post<{
+      item: any
+      success: boolean
+      message?: string
+      statusCode?: number
+      errorType?: string
+    }>(API_PATHS.AUTH.SRP_AUTHENTICATE, data)
+
+    if (response.data && !response.data.success) {
+      throw new ApiError(
+        response.data.message || AUTH_ERROR_MESSAGES.AUTHENTICATION_FAILED,
+        response.data.statusCode || HTTP_STATUS.BAD_REQUEST,
+        response.data.errorType || ERROR_TYPES.API_ERROR
+      )
+    }
+
+    return response?.data?.item
+  } catch (error) {
+    console.error(AUTH_ERROR_MESSAGES.AUTHENTICATION_FAILED, error)
+    throw ApiErrorService.handleError(error)
+  }
 }
 
 /**
@@ -81,8 +148,28 @@ const authenticateUser = async (data: object) => {
  * @returns success message from server
  */
 const logoutUser = async () => {
-  const response = await axios.post(API_PATHS.AUTH.LOGOUT)
-  return response?.data?.item
+  try {
+    const response = await axios.post<{
+      item: any
+      success: boolean
+      message?: string
+      statusCode?: number
+      errorType?: string
+    }>(API_PATHS.AUTH.LOGOUT)
+
+    if (response.data && !response.data.success) {
+      throw new ApiError(
+        response.data.message || AUTH_ERROR_MESSAGES.LOGOUT_FAILED,
+        response.data.statusCode || HTTP_STATUS.BAD_REQUEST,
+        response.data.errorType || ERROR_TYPES.API_ERROR
+      )
+    }
+
+    return response?.data?.item
+  } catch (error) {
+    console.error(AUTH_ERROR_MESSAGES.LOGOUT_FAILED, error)
+    throw ApiErrorService.handleError(error)
+  }
 }
 
 /**
@@ -92,6 +179,14 @@ const logoutUser = async () => {
  * @param password - the inserted password value.
  */
 export const handleRegister = async (username: string, email: string, password: string) => {
+  if (!username || !email || !password) {
+    throw new ApiError(
+      AUTH_ERROR_MESSAGES.MISSING_CREDENTIALS,
+      HTTP_STATUS.BAD_REQUEST,
+      ERROR_TYPES.VALIDATION_ERROR
+    )
+  }
+
   try {
     // Generate and store client key pair
     generateAndStoreSecureClientKeyPair(username, password)
@@ -119,11 +214,27 @@ export const handleRegister = async (username: string, email: string, password: 
     // Send registration request
     const { encryptedSessionToken, helperAesKey } = await registerUser(encryptedData)
 
+    if (!encryptedSessionToken || !helperAesKey) {
+      throw new ApiError(
+        GENERIC_ERROR_MESSAGES.INVALID_SERVER_RESPONSE,
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_TYPES.API_ERROR
+      )
+    }
+
     // Decrypt the retrieved session token
     const sessionToken = RegistrationEncryptionService.decryptSessionToken(
       encryptedSessionToken,
       helperAesKey
     )
+
+    if (!sessionToken) {
+      throw new ApiError(
+        AUTH_ERROR_MESSAGES.INVALID_SESSION_TOKEN,
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_TYPES.API_ERROR
+      )
+    }
 
     // Store the session token securely
     const cookies = getCookies()
@@ -138,14 +249,28 @@ export const handleRegister = async (username: string, email: string, password: 
     )
     const authStore = useAuthStore()
     authStore.updateAuthToken()
+
+    return true
   } catch (error) {
-    console.error('Registration failed:', error)
-    throw error
+    console.error(AUTH_ERROR_MESSAGES.REGISTRATION_FAILED, error)
+    throw ApiErrorService.handleError(error)
   }
 }
 
-// Implements the SRP login process.
+/**
+ * Implements the SRP login process.
+ * @param username - the inserted username value.
+ * @param password - the inserted password value.
+ */
 export const handleLogin = async (username: string, password: string) => {
+  if (!username || !password) {
+    throw new ApiError(
+      AUTH_ERROR_MESSAGES.MISSING_CREDENTIALS,
+      HTTP_STATUS.BAD_REQUEST,
+      ERROR_TYPES.VALIDATION_ERROR
+    )
+  }
+
   try {
     // Generate and store client key pair
     generateAndStoreSecureClientKeyPair(username, password)
@@ -174,6 +299,14 @@ export const handleLogin = async (username: string, password: string) => {
     const { encryptedServerPublicValueB, helperSrpParamsAesKey, salt } =
       await fetchSrpParams(encryptedSrpParamsData)
 
+    if (!encryptedServerPublicValueB || !helperSrpParamsAesKey || !salt) {
+      throw new ApiError(
+        GENERIC_ERROR_MESSAGES.INVALID_SERVER_RESPONSE,
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_TYPES.API_ERROR
+      )
+    }
+
     // Decrypt the server's public value B
     const serverPublicValueB = LoginEncryptionService.decryptServerPublicValueB(
       encryptedServerPublicValueB,
@@ -182,7 +315,11 @@ export const handleLogin = async (username: string, password: string) => {
 
     // Abort authentication if B % N == 0
     if (BigInt(`0x${serverPublicValueB}`) % N === 0n) {
-      throw new Error('Authentication failed: Invalid server value B.')
+      throw new ApiError(
+        AUTH_ERROR_MESSAGES.INVALID_SERVER_VALUE,
+        HTTP_STATUS.BAD_REQUEST,
+        ERROR_TYPES.AUTH_ERROR
+      )
     }
 
     // Compute SRP proof values
@@ -212,6 +349,14 @@ export const handleLogin = async (username: string, password: string) => {
     // Authenticate with server
     const authResponse = await authenticateUser(encryptedData)
 
+    if (!authResponse) {
+      throw new ApiError(
+        GENERIC_ERROR_MESSAGES.INVALID_SERVER_RESPONSE,
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_TYPES.API_ERROR
+      )
+    }
+
     // Decrypt authentication response
     const { sessionToken, userPublicKey, userPrivateKey, serverProofM2 } =
       LoginEncryptionService.decryptAuthenticationResponse(authResponse, clientPrivateKeyPem)
@@ -219,7 +364,11 @@ export const handleLogin = async (username: string, password: string) => {
     // Verify server proof
     const clientProofM2 = computeM2(clientPublicValueA, clientProofM1, sessionKeyK)
     if (clientProofM2 !== serverProofM2) {
-      throw new Error('Proof verification failed. Authorization aborted!')
+      throw new ApiError(
+        AUTH_ERROR_MESSAGES.PROOF_VERIFICATION_FAILED,
+        HTTP_STATUS.BAD_REQUEST,
+        ERROR_TYPES.AUTH_ERROR
+      )
     }
 
     // Store session data
@@ -236,9 +385,11 @@ export const handleLogin = async (username: string, password: string) => {
     )
     const authStore = useAuthStore()
     authStore.updateAuthToken()
+
+    return true
   } catch (error) {
-    console.error('Login failed:', error)
-    throw error
+    console.error(AUTH_ERROR_MESSAGES.LOGIN_FAILED, error)
+    throw ApiErrorService.handleError(error)
   }
 }
 
@@ -253,24 +404,24 @@ export const handleLogout = async () => {
     const authStore = useAuthStore()
     const token = authStore.authToken
 
-    if (token) {
-      // Call the backend logout endpoint
-      await logoutUser()
-
-      // Clear the auth token from cookies
-      const cookies = getCookies()
-      cookies.remove(AUTH.TOKEN_COOKIE_NAME)
-
-      // Update the auth store state
-      authStore.logout()
-
-      return true
-    } else {
-      console.warn('No active session to logout from')
+    if (!token) {
+      console.warn(AUTH_ERROR_MESSAGES.NO_ACTIVE_SESSION)
       return false
     }
+
+    // Call the backend logout endpoint
+    await logoutUser()
+
+    // Clear the auth token from cookies
+    const cookies = getCookies()
+    cookies.remove(AUTH.TOKEN_COOKIE_NAME)
+
+    // Update the auth store state
+    authStore.logout()
+
+    return true
   } catch (error) {
-    console.error('Logout failed:', error)
-    throw error
+    console.error(AUTH_ERROR_MESSAGES.LOGOUT_FAILED, error)
+    throw ApiErrorService.handleError(error)
   }
 }

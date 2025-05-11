@@ -1,6 +1,7 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <template>
   <div class="notifications">
+    <p-toast />
     <h2>Notifications</h2>
     <p-data-table
       class="data-table-container"

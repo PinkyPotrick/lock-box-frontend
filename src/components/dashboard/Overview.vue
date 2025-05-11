@@ -1,6 +1,7 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <template>
   <div class="overview">
+    <p-toast />
     <h2>Dashboard Overview</h2>
 
     <!-- Records chart -->

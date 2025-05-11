@@ -14,7 +14,7 @@
           id="username-register"
           type="text"
           v-model="username"
-          :class="{'p-invalid': submitted && !username}"
+          :class="{ 'p-invalid': submitted && !username }"
           required
         />
         <small v-if="submitted && !username" class="p-error">Username is required.</small>
@@ -26,7 +26,7 @@
           id="email-register"
           type="email"
           v-model="email"
-          :class="{'p-invalid': submitted && !email}"
+          :class="{ 'p-invalid': submitted && !email }"
           required
         />
         <small v-if="submitted && !email" class="p-error">Email is required.</small>
@@ -37,7 +37,7 @@
         <p-password
           id="password-register"
           v-model="password"
-          :class="{'p-invalid': submitted && !password}"
+          :class="{ 'p-invalid': submitted && !password }"
           :feedback="false"
           :toggleMask="true"
           fluid
@@ -51,7 +51,7 @@
             v-for="(error, index) in passwordErrors"
             :key="index"
             class="p-error"
-            style="display: block;"
+            style="display: block"
           >
             {{ error }}
           </small>
@@ -63,13 +63,15 @@
         <p-password
           id="password-confirmation-register"
           v-model="confirmPassword"
-          :class="{'p-invalid': submitted && !confirmPassword}"
+          :class="{ 'p-invalid': submitted && !confirmPassword }"
           :toggleMask="true"
           fluid
           :feedback="false"
           required
         ></p-password>
-        <small v-if="submitted && !confirmPassword" class="p-error">Confirm password is required.</small>
+        <small v-if="submitted && !confirmPassword" class="p-error"
+          >Confirm password is required.</small
+        >
         <small v-else-if="mismatchError" class="p-error">{{ mismatchError }}</small>
       </div>
 
@@ -89,11 +91,11 @@
 </template>
 
 <script lang="ts">
+import { AUTH_SUCCESS_MESSAGES } from '@/constants/appConstants'
+import { handleRegister } from '@/services/authService'
+import { useToastService } from '@/services/toastService'
 import { defineComponent, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { useToast } from 'primevue/usetoast'
-import { handleRegister } from '@/services/authService'
-import { TOAST_LIFE_WARNING, TOAST_LIFE_ERROR } from '@/constants/appConstants'
 
 export default defineComponent({
   setup() {
@@ -104,9 +106,11 @@ export default defineComponent({
     const mismatchError = ref('')
     const passwordErrors = ref<string[]>([])
     const router = useRouter()
-    const toast = useToast()
     const loading = ref(false)
     const submitted = ref(false)
+
+    // Use the toast service instead of useToast
+    const { handleError, handleSuccess, handleWarning } = useToastService()
 
     // Watch for mismatched passwords
     watch([password, confirmPassword], () => {
@@ -138,34 +142,22 @@ export default defineComponent({
 
       // Basic check for required fields
       if (!username.value || !email.value || !password.value || !confirmPassword.value) {
-        toast.add({
-          severity: 'warn',
-          summary: 'Required fields missing',
-          detail: 'Please fill in all required fields',
-          life: TOAST_LIFE_WARNING
-        })
+        handleWarning('Please fill in all required fields', 'Required fields missing')
         return
       }
 
       // If still mismatched, return
       if (mismatchError.value) {
-        toast.add({
-          severity: 'warn',
-          summary: 'Passwords mismatch',
-          detail: mismatchError.value,
-          life: TOAST_LIFE_ERROR
-        })
+        handleWarning(mismatchError.value, 'Passwords mismatch')
         return
       }
 
       // If we have password-specific validation errors
       if (passwordErrors.value.length) {
-        toast.add({
-          severity: 'warn',
-          summary: 'Weak or invalid password',
-          detail: 'Please adjust your password according to the rules',
-          life: TOAST_LIFE_ERROR
-        })
+        handleWarning(
+          'Please adjust your password according to the rules',
+          'Weak or invalid password'
+        )
         return
       }
 
@@ -176,15 +168,14 @@ export default defineComponent({
           // Handle the registration process
           await handleRegister(username.value, email.value, password.value)
           loading.value = false
+
+          // Show success message
+          handleSuccess(AUTH_SUCCESS_MESSAGES.REGISTER_SUCCESS)
+
           // Redirect to the dashboard on successful registration
           router.push({ name: 'Overview' })
         } catch (error) {
-          toast.add({
-            severity: 'error',
-            summary: 'Registration failed',
-            detail: error as string,
-            life: TOAST_LIFE_ERROR
-          })
+          handleError(error, 'Registration failed')
           console.error('Registration failed:', error)
           loading.value = false
         }
