@@ -24,6 +24,12 @@
         >
       </li>
       <li class="side-panel-item">
+        <router-link to="/domains" active-class="active">
+          <i class="pi pi-globe"></i>
+          <span class="label">Domains</span></router-link
+        >
+      </li>
+      <li class="side-panel-item">
         <router-link to="/notifications" active-class="active">
           <i class="pi pi-bell"></i>
           <span>Notifications</span>

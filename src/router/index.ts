@@ -1,13 +1,13 @@
-import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
-import { isLoggedIn } from '@/stores/authStore'
 import Login from '@/components/auth/Login.vue'
 import Register from '@/components/auth/Register.vue'
+import Audit from '@/components/dashboard/Audit.vue'
+import Notifications from '@/components/dashboard/Notifications.vue'
 import Overview from '@/components/dashboard/Overview.vue'
 import Profile from '@/components/dashboard/Profile.vue'
 import Vaults from '@/components/dashboard/Vaults.vue'
-import Notifications from '@/components/dashboard/Notifications.vue'
-import Audit from '@/components/dashboard/Audit.vue'
 import MainLayout from '@/layouts/MainLayout.vue'
+import { isLoggedIn } from '@/stores/authStore'
+import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 
 const routes: Array<RouteRecordRaw> = [
   {
@@ -62,6 +62,19 @@ const routes: Array<RouteRecordRaw> = [
         component: Vaults
       },
       {
+        path: '/domains',
+        name: 'domains',
+        component: () => import('@/components/dashboard/Domain.vue'),
+        meta: {
+          requiresAuth: true
+        }
+      },
+      {
+        path: 'vaults/:vaultId/credentials',
+        name: 'VaultCredentials',
+        component: () => import('@/components/dashboard/VaultCredentials.vue')
+      },
+      {
         path: 'notifications',
         name: 'Notifications',
         component: Notifications
@@ -72,14 +85,6 @@ const routes: Array<RouteRecordRaw> = [
         component: Audit
       }
     ]
-  },
-  {
-    path: '/vaults/:vaultId/credentials',
-    name: 'VaultCredentials',
-    component: () => import('@/components/dashboard/VaultCredentials.vue'),
-    meta: {
-      requiresAuth: true
-    }
   }
 ]
 

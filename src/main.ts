@@ -18,6 +18,7 @@ import FloatLabel from 'primevue/floatlabel'
 import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import InputText from 'primevue/inputtext'
+import Checkbox from 'primevue/checkbox'
 import Menu from 'primevue/menu'
 import MultiSelect from 'primevue/multiselect'
 import OverlayBadge from 'primevue/overlaybadge'
@@ -123,6 +124,7 @@ app
   .component('p-column-group', ColumnGroup)
   .component('p-row', Row)
   .component('p-dialog', Dialog)
+  .component('p-checkbox', Checkbox)
   .component('p-textarea', Textarea)
   .component('p-confirm-dialog', ConfirmDialog)
   .component('p-tag', Tag)

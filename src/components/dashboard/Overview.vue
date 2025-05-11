@@ -202,70 +202,70 @@ export default defineComponent({
       )
     }
 
-    const handleSingleDatePoint = (entry: any) => {
-      // For a single date, show the actual date with surrounding context dates
-      const mainDate = new Date(entry.date)
-      const labels = []
-      const data = []
-      const failedData: number[] = entry.failedCount ? [] : []
+    const ensureDateContext = (entries: any[]): any[] => {
+      if (entries.length === 0) return []
 
-      // Generate 2 days before and 2 days after
-      for (let i = -2; i <= 2; i++) {
-        const currentDate = new Date(mainDate)
-        currentDate.setDate(mainDate.getDate() + i)
+      // Get the earliest and latest dates
+      const sortedEntries = [...entries].sort(
+        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+      )
 
-        // Format as MM-DD
-        const month = (currentDate.getMonth() + 1).toString().padStart(2, '0')
-        const day = currentDate.getDate().toString().padStart(2, '0')
-        labels.push(`${month}-${day}`)
+      const firstDate = new Date(sortedEntries[0].date)
+      const lastDate = new Date(sortedEntries[sortedEntries.length - 1].date)
 
-        // Only add the real value for i=0, zeros for context days
-        data.push(i === 0 ? entry.count : 0)
+      // Add 2 days before and 2 days after to ensure surrounding context
+      const startDate = new Date(firstDate)
+      startDate.setDate(firstDate.getDate() - 2)
 
-        if (failedData) {
-          failedData.push(i === 0 ? entry.failedCount : 0)
-        }
-      }
+      const endDate = new Date(lastDate)
+      endDate.setDate(lastDate.getDate() + 2)
 
-      // Update chart data
-      loginChartData.value.labels = labels
-      loginChartData.value.datasets[0].data = data
+      // Create the full date range with zeros for missing dates
+      const result = []
+      const existingDates = new Map(entries.map((entry) => [entry.date, entry]))
 
-      // Update failed logins if needed
-      if (failedData && entry.failedCount > 0) {
-        if (loginChartData.value.datasets.length === 1) {
-          loginChartData.value.datasets.push({
-            label: 'Failed Logins',
-            data: failedData,
-            fill: false,
-            borderColor: '#FF6384',
-            tension: 0.4
-          })
+      for (
+        let currentDate = new Date(startDate);
+        currentDate <= endDate;
+        currentDate.setDate(currentDate.getDate() + 1)
+      ) {
+        const dateStr = currentDate.toISOString().split('T')[0]
+
+        if (existingDates.has(dateStr)) {
+          // Use existing data
+          result.push(existingDates.get(dateStr))
         } else {
-          loginChartData.value.datasets[1].data = failedData
+          // Add a zero-data entry for this date
+          result.push({
+            date: dateStr,
+            count: 0,
+            failedCount: 0
+          })
         }
-      } else if (loginChartData.value.datasets.length > 1) {
-        // Remove failed logins dataset if no failed logins
-        loginChartData.value.datasets.pop()
       }
+
+      return result
     }
 
     const updateChartWithData = (entries: any[]) => {
+      // Add surrounding context dates
+      const entriesWithContext = ensureDateContext(entries)
+
       // Format dates for display
-      const labels = entries.map((entry) => {
+      const labels = entriesWithContext.map((entry) => {
         const date = new Date(entry.date)
         return `${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`
       })
 
-      const loginCounts = entries.map((entry) => entry.count)
-      const failedCounts = entries.map((entry) => entry.failedCount)
+      const loginCounts = entriesWithContext.map((entry) => entry.count)
+      const failedCounts = entriesWithContext.map((entry) => entry.failedCount)
 
       // Update chart data
       loginChartData.value.labels = labels
       loginChartData.value.datasets[0].data = loginCounts
 
       // Handle failed logins if they exist
-      if (entries.some((entry) => entry.failedCount > 0)) {
+      if (entriesWithContext.some((entry) => entry.failedCount > 0)) {
         if (loginChartData.value.datasets.length === 1) {
           loginChartData.value.datasets.push({
             label: 'Failed Logins',
@@ -296,12 +296,8 @@ export default defineComponent({
           const maxValue = Math.max(...processedEntries.map((e) => e.count))
           loginChartOptions.value.scales.y.suggestedMax = Math.max(5, Math.ceil(maxValue * 1.2))
 
-          // Format the chart data based on date count
-          if (processedEntries.length === 1) {
-            handleSingleDatePoint(processedEntries[0])
-          } else {
-            updateChartWithData(processedEntries)
-          }
+          // Use the updated chart data method for all cases, no special handling for single date
+          updateChartWithData(processedEntries)
         } else {
           loginChartData.value.labels = []
           loginChartData.value.datasets[0].data = []

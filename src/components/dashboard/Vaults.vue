@@ -14,11 +14,12 @@
       class="data-table-container"
       :value="vaults"
       paginator
-      :rows="10"
+      :rows="rows"
       :rowsPerPageOptions="[5, 10, 20]"
       :totalRecords="totalRecords"
       :loading="loading"
       :emptyMessage="'No vaults found'"
+      @page="onRowsPerPageChange"
     >
       <p-column field="icon" header="">
         <template #body="slotProps">
@@ -244,6 +245,9 @@ export default defineComponent({
     const showCreateVaultDialog = ref(false)
     const showEditVaultDialog = ref(false)
 
+    // Add a reactive reference for rows per page
+    const rows = ref(10)
+
     // Form data
     const newVault = reactive<VaultData>({
       name: '',
@@ -306,10 +310,10 @@ export default defineComponent({
     })
 
     // Methods
-    const fetchVaults = async (page = 0, size = 10) => {
+    const fetchVaults = async (page = 0) => {
       loading.value = true
       try {
-        const result = await VaultService.getVaults(page, size)
+        const result = await VaultService.getVaults(page, rows.value)
         vaults.value = result.vaults
         totalRecords.value = result.totalCount
       } catch (error) {
@@ -325,6 +329,12 @@ export default defineComponent({
       } finally {
         loading.value = false
       }
+    }
+
+    // Add handler for rows per page change
+    const onRowsPerPageChange = (event: { rows: number }) => {
+      rows.value = event.rows
+      fetchVaults(0) // Reset to first page when changing page size
     }
 
     const createVault = async () => {
@@ -485,6 +495,8 @@ export default defineComponent({
       v$,
       isFormValid,
       isEditFormValid,
+      rows,
+      onRowsPerPageChange,
       createVault,
       startEditVault,
       updateVault,
@@ -632,4 +644,3 @@ export default defineComponent({
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 </style>
-```

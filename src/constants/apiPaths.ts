@@ -15,5 +15,8 @@ export const API_PATHS = {
   },
   VAULTS: {
     BASE: '/api/vaults'
+  },
+  DOMAINS: {
+    BASE: '/api/domains'
   }
 }
