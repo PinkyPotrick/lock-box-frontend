@@ -1,7 +1,7 @@
 export const TOAST_LIFE_SUCCESS = 3000
 export const TOAST_LIFE_ERROR = 5000
 export const TOAST_LIFE_WARNING = 4000
-export const TOAST_LIFE_INFO = 2000
+export const TOAST_LIFE_INFO = 4000
 
 export const USER_STORAGE_KEY = 'lockbox_user'
 
@@ -121,6 +121,23 @@ export const PROFILE_ERROR_MESSAGES = {
   PASSWORD_CHANGE_FAILED: 'Failed to change password',
   USERNAME_MISSING: 'Username not found in session storage',
   INVALID_PASSWORD: 'Invalid password format'
+}
+
+export const PASSWORD_CHANGE_ERROR_MESSAGES = {
+  MISSING_CREDENTIALS: 'Please provide your username and current password',
+  INIT_FAILED: 'Failed to initiate password change. Please try again.',
+  COMPLETE_FAILED: 'Failed to complete password change. Please try again.',
+  INVALID_STATE: 'Invalid password change state. Please start over.',
+  PROOF_VERIFICATION_FAILED: 'Server verification failed. Please try again.',
+  CURRENT_PASSWORD_INCORRECT: 'Current password is incorrect'
+}
+
+export const PASSWORD_CHANGE_SUCCESS_MESSAGES = {
+  PASSWORD_CHANGED: 'Your password has been changed successfully'
+}
+
+export const PASSWORD_CHANGE_INFO_MESSAGES = {
+  SECURITY_LOGOUT: "You'll be logged out for security reasons."
 }
 
 export const VAULT_ERROR_MESSAGES = {

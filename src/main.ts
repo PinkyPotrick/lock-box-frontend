@@ -5,6 +5,7 @@ import Badge from 'primevue/badge'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
 import Chart from 'primevue/chart'
+import Checkbox from 'primevue/checkbox'
 import Column from 'primevue/column'
 import ColumnGroup from 'primevue/columngroup'
 import PrimeVue from 'primevue/config'
@@ -18,7 +19,6 @@ import FloatLabel from 'primevue/floatlabel'
 import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import InputText from 'primevue/inputtext'
-import Checkbox from 'primevue/checkbox'
 import Menu from 'primevue/menu'
 import MultiSelect from 'primevue/multiselect'
 import OverlayBadge from 'primevue/overlaybadge'
@@ -27,6 +27,11 @@ import Password from 'primevue/password'
 import ProgressSpinner from 'primevue/progressspinner'
 import Row from 'primevue/row'
 import Select from 'primevue/select'
+import Step from 'primevue/step'
+import StepList from 'primevue/steplist'
+import StepPanel from 'primevue/steppanel'
+import StepPanels from 'primevue/steppanels'
+import Stepper from 'primevue/stepper'
 import Tag from 'primevue/tag'
 import Textarea from 'primevue/textarea'
 import Toast from 'primevue/toast'
@@ -38,57 +43,17 @@ import VueCookies from 'vue-cookies'
 import App from './App.vue'
 import router from './router'
 import { initializeCookies } from './utils/cookiesUtils'
-// import { definePreset } from '@primevue/themes'
+
 import 'primeicons/primeicons.css'
 import './assets/main.css'
 
 const pinia = createPinia()
 const app = createApp(App)
 
-// const LockBoxColors = definePreset(Lara, {
-//   semantic: {
-//     colorScheme: {
-//       light: {
-//         surface: {
-//           0: '#ffffff',
-//           50: '{zinc.50}',
-//           100: '{zinc.100}',
-//           200: '{zinc.200}',
-//           300: '{zinc.300}',
-//           400: '{zinc.400}',
-//           500: '{zinc.500}',
-//           600: '{zinc.600}',
-//           700: '{zinc.700}',
-//           800: '{zinc.800}',
-//           900: '{zinc.900}',
-//           950: '{zinc.950}'
-//         }
-//       },
-//       dark: {
-//         surface: {
-//           0: '#ffffff',
-//           50: '{slate.50}',
-//           100: '{slate.100}',
-//           200: '{slate.200}',
-//           300: '{slate.300}',
-//           400: '{slate.400}',
-//           500: '{slate.500}',
-//           600: '{slate.600}',
-//           700: '{slate.700}',
-//           800: '{slate.800}',
-//           900: '{slate.900}',
-//           950: '{slate.950}'
-//         }
-//       }
-//     }
-//   }
-// })
-
 axios.defaults.baseURL = 'http://localhost:8080' // LockBox server
 
 app.use(PrimeVue, {
   theme: {
-    // preset: LockBoxColors,
     preset: Lara,
     options: {
       prefix: 'p',
@@ -136,5 +101,10 @@ app
   .component('p-chart', Chart)
   .component('p-toast', Toast)
   .component('p-progress-spinner', ProgressSpinner)
+  .component('p-stepper', Stepper)
+  .component('p-step-list', StepList)
+  .component('p-step-panels', StepPanels)
+  .component('p-step', Step)
+  .component('p-step-panel', StepPanel)
 
 app.mount('#app')

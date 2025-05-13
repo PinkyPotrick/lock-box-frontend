@@ -8,7 +8,8 @@ export const API_PATHS = {
   },
   USERS: {
     PROFILE: '/api/users/profile',
-    CHANGE_PASSWORD: '/api/users/change-password'
+    PASSWORD_CHANGE_INIT: '/api/users/password-change/init',
+    PASSWORD_CHANGE_COMPLETE: '/api/users/password-change/complete'
   },
   DASHBOARD: {
     OVERVIEW: '/api/dashboard/overview',
