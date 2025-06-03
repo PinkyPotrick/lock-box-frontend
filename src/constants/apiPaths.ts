@@ -20,5 +20,8 @@ export const API_PATHS = {
   },
   DOMAINS: {
     BASE: '/api/domains'
+  },
+  AUDIT: {
+    LOGS: '/api/audit-logs'
   }
 }

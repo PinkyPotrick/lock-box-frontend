@@ -1,10 +1,5 @@
-export interface LevelOption {
-  label: string
-  value: 'DEBUG' | 'INFO' | 'WARNING' | 'ERROR' | 'CRITICAL' | null
-}
-
-export const levelOptions: LevelOption[] = [
-  { label: 'All', value: null },
+export const logLevelOptions = [
+  { label: 'All', value: 'ALL' },
   { label: 'Debug', value: 'DEBUG' },
   { label: 'Info', value: 'INFO' },
   { label: 'Warning', value: 'WARNING' },

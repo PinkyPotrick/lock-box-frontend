@@ -140,6 +140,12 @@ export const PASSWORD_CHANGE_INFO_MESSAGES = {
   SECURITY_LOGOUT: "You'll be logged out for security reasons."
 }
 
+export const AUDIT_ERROR_MESSAGES = {
+  FETCH_LOGS_FAILED: 'Failed to fetch audit logs',
+  INVALID_DATE_RANGE: 'Start date must be before end date',
+  FETCH_LOG_DETAILS_FAILED: 'Failed to fetch audit log details'
+}
+
 export const VAULT_ERROR_MESSAGES = {
   FETCH_VAULTS_FAILED: 'Failed to load vaults',
   FETCH_VAULT_FAILED: 'Failed to fetch vault',

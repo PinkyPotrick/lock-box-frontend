@@ -244,7 +244,7 @@ import {
 import type { User } from '@/models/user'
 import router from '@/router'
 import { handleLogout } from '@/services/authService'
-import { PasswordChangeService } from '@/services/PasswordChangeService'
+import { PasswordChangeService } from '@/services/passwordChangeService'
 import { ProfileService } from '@/services/profileService'
 import { useToastService } from '@/services/toastService'
 import { useAuthStore } from '@/stores/authStore'
