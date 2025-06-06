@@ -90,18 +90,21 @@ export class AuditLogEncryptionService {
       const resourceName = this.tryDecryptField(encryptedResourceName, helperAesKey)
       const additionalInfo = this.tryDecryptField(encryptedAdditionalInfo, helperAesKey)
 
-      // Return the decrypted audit log data
+      // Debug the timestamp received
+      console.debug('Processing audit log timestamp:', timestamp)
+
+      // Return the decrypted audit log data with correctly parsed date
       return {
         id,
         userId,
-        timestamp: new Date(timestamp),
-        actionType,
-        operationType,
-        logLevel,
-        actionStatus,
-        ipAddress,
-        clientInfo,
-        failureReason,
+        timestamp: this.safeParseDate(timestamp),
+        actionType: actionType || 'UNKNOWN',
+        operationType: operationType || 'READ',
+        logLevel: logLevel || 'INFO',
+        actionStatus: actionStatus || 'UNKNOWN',
+        ipAddress: ipAddress || '',
+        clientInfo: clientInfo || '',
+        failureReason: failureReason || '',
         resourceId,
         resourceName,
         additionalInfo
@@ -151,6 +154,50 @@ export class AuditLogEncryptionService {
     } catch (error) {
       console.warn('Error decrypting field:', error)
       return ''
+    }
+  }
+
+  /**
+   * Safely parse a date from the API which can come either as string or array
+   *
+   * @param dateData Date data from API (can be string or array)
+   * @returns Valid Date object
+   */
+  private static safeParseDate(dateData: string | any[]): Date {
+    // If no data provided, return current date
+    if (!dateData) return new Date()
+
+    try {
+      // Check if the date is an array format [year, month, day, hour, minute, second, nanosecond]
+      if (Array.isArray(dateData) && dateData.length >= 6) {
+        // JavaScript months are 0-indexed (0=January, 11=December)
+        // But our array data uses 1-indexed months, so we subtract 1
+        const [year, month, day, hour, minute, second] = dateData
+
+        // Create date from components
+        const date = new Date(year, month - 1, day, hour, minute, second)
+
+        console.debug('Parsed array date:', dateData, 'to:', date.toISOString())
+        return date
+      }
+
+      // Handle string format
+      if (typeof dateData === 'string') {
+        const date = new Date(dateData)
+        // Check if date is valid
+        if (isNaN(date.getTime())) {
+          console.warn('Invalid string date format from API:', dateData)
+          return new Date()
+        }
+        return date
+      }
+
+      // If we get here, the format is unknown
+      console.warn('Unknown date format received from API:', dateData)
+      return new Date()
+    } catch (error) {
+      console.warn('Error parsing date:', error, dateData)
+      return new Date()
     }
   }
 }

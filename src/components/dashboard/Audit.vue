@@ -1,63 +1,78 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <template>
   <div class="audit">
-    <p-toast />
     <h2>Audit Logs</h2>
 
     <div class="filter-container">
-      <p-select
-        v-model="selectedOperationType"
-        :options="operationTypeOptions"
-        optionLabel="label"
-        optionValue="value"
-        placeholder="Filter by Operation"
-        class="filter-item"
-      ></p-select>
+      <!-- Operation Type Filter with Label -->
+      <div class="filter-item-with-label">
+        <label class="filter-label">Operation Type</label>
+        <p-select
+          v-model="selectedOperationType"
+          :options="operationTypeOptions"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="All"
+          class="filter-item"
+        ></p-select>
+      </div>
 
-      <p-select
-        v-model="selectedLogLevel"
-        :options="logLevelOptions"
-        optionLabel="label"
-        optionValue="value"
-        placeholder="Filter by Level"
-        class="filter-item"
-      ></p-select>
+      <!-- Log Level Filter with Label -->
+      <div class="filter-item-with-label">
+        <label class="filter-label">Log Level</label>
+        <p-select
+          v-model="selectedLogLevel"
+          :options="logLevelOptions"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="All"
+          class="filter-item"
+        ></p-select>
+      </div>
 
-      <p-date-picker
-        v-model="startDate"
-        placeholder="Start Date"
-        dateFormat="yy-mm-dd"
-        class="filter-item"
-        :showTime="true"
-        hourFormat="24"
-      ></p-date-picker>
+      <!-- Start Date Filter with Label -->
+      <div class="filter-item-with-label">
+        <label class="filter-label">Start Date</label>
+        <p-date-picker
+          v-model="startDate"
+          placeholder="Start Date"
+          dateFormat="yy-mm-dd"
+          class="filter-item"
+        ></p-date-picker>
+      </div>
 
-      <p-date-picker
-        v-model="endDate"
-        placeholder="End Date"
-        dateFormat="yy-mm-dd"
-        class="filter-item"
-        :showTime="true"
-        hourFormat="24"
-      ></p-date-picker>
+      <!-- End Date Filter with Label -->
+      <div class="filter-item-with-label">
+        <label class="filter-label">End Date</label>
+        <p-date-picker
+          v-model="endDate"
+          placeholder="End Date"
+          dateFormat="yy-mm-dd"
+          class="filter-item"
+        ></p-date-picker>
+      </div>
+    </div>
 
+    <!-- Filter and Reset buttons moved to left side -->
+    <div class="button-container">
       <div class="filter-actions">
-        <p-button label="Filter" icon="pi pi-filter" @click="applyFilters"></p-button>
-        <p-button
-          label="Reset"
-          icon="pi pi-refresh"
-          class="p-button-secondary"
-          @click="resetFilters"
-        ></p-button>
+        <p-button class="p-button-sm" @click="applyFilters">
+          <i class="pi pi-filter mr-2"></i>
+          Filter
+        </p-button>
+        <p-button class="p-button-sm p-button-secondary" @click="resetFilters">
+          <i class="pi pi-refresh mr-2"></i>
+          Reset
+        </p-button>
       </div>
     </div>
 
     <p-data-table
       :value="auditLogs"
       :paginator="true"
-      :rows="pageSize"
+      :rows="rows"
       v-model:first="first"
-      :rowsPerPageOptions="[10, 20, 50]"
+      :rowsPerPageOptions="[5, 10, 20, 50]"
       paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink RowsPerPageDropdown CurrentPageReport"
       :currentPageReportTemplate="'{first} to {last} of {totalRecords} logs'"
       :loading="loading"
@@ -65,45 +80,60 @@
       dataKey="id"
       :totalRecords="totalRecords"
       @page="onPageChange"
-      sortField="timestamp"
-      :sortOrder="-1"
+      v-model:sortField="sortField"
+      v-model:sortOrder="sortOrder"
+      :lazy="false"
+      @sort="onSortChange"
+      class="audit-table"
+      stripedRows
+      responsiveLayout="scroll"
     >
-      <p-column field="timestamp" header="Timestamp" sortable>
-        <template #body="slotProps">
-          {{ formatDateTime(slotProps.data.timestamp) }}
+      <p-column field="timestamp" header="Timestamp" :sortable="true">
+        <template #body="{ data }">
+          {{ formatDateTime(data.timestamp) }}
         </template>
       </p-column>
-      <p-column field="actionType" header="Action Type"></p-column>
-      <p-column field="operationType" header="Operation Type" sortable>
-        <template #body="slotProps">
-          <p-tag
-            :value="slotProps.data.operationType"
-            :severity="getOperationTypeSeverity(slotProps.data.operationType)"
-          />
+      <p-column field="actionType" header="Action Type">
+        <template #body="{ data }">
+          {{ formatActionType(data.actionType) }}
         </template>
       </p-column>
-      <p-column field="logLevel" header="Log Level" sortable>
-        <template #body="slotProps">
+      <p-column field="operationType" header="Operation Type" :sortable="true">
+        <template #body="{ data }">
           <p-tag
-            :value="slotProps.data.logLevel"
-            :severity="getLogLevelSeverity(slotProps.data.logLevel)"
+            v-if="data.operationType"
+            :value="data.operationType"
+            :severity="getOperationTypeSeverity(data.operationType)"
           />
+          <span v-else>-</span>
+        </template>
+      </p-column>
+      <p-column field="logLevel" header="Log Level" :sortable="true">
+        <template #body="{ data }">
+          <p-tag
+            v-if="data.logLevel && data.logLevel !== 'null'"
+            :value="data.logLevel"
+            :severity="getLogLevelSeverity(data.logLevel)"
+          />
+          <span v-else>-</span>
         </template>
       </p-column>
       <p-column field="resourceName" header="Resource Name">
-        <template #body="slotProps">
-          <span :title="slotProps.data.resourceName">{{
-            getShortResourceName(slotProps.data.resourceName)
-          }}</span>
+        <template #body="{ data }">
+          <span :title="data.resourceName">{{ getShortResourceName(data.resourceName) }}</span>
         </template>
       </p-column>
-      <p-column field="actionStatus" header="Status"></p-column>
+      <p-column field="actionStatus" header="Status">
+        <template #body="{ data }">
+          {{ data.actionStatus }}
+        </template>
+      </p-column>
       <p-column header="Details">
-        <template #body="slotProps">
+        <template #body="{ data }">
           <p-button
             icon="pi pi-eye"
             class="p-button-sm p-button-info"
-            @click="viewLogDetails(slotProps.data)"
+            @click="viewLogDetails(data)"
             v-tooltip.top="'View details'"
           />
         </template>
@@ -117,6 +147,7 @@
       :modal="true"
       :closable="true"
       class="audit-details-dialog"
+      :style="{ width: '700px' }"
     >
       <div v-if="selectedLog" class="details-content">
         <div class="detail-section">
@@ -127,24 +158,28 @@
           </div>
           <div class="detail-row">
             <div class="detail-label">Action Type:</div>
-            <div class="detail-value">{{ selectedLog.actionType }}</div>
+            <div class="detail-value">{{ formatActionType(selectedLog.actionType) }}</div>
           </div>
           <div class="detail-row">
             <div class="detail-label">Operation Type:</div>
             <div class="detail-value">
               <p-tag
+                v-if="selectedLog.operationType"
                 :value="selectedLog.operationType"
                 :severity="getOperationTypeSeverity(selectedLog.operationType)"
               />
+              <span v-else>-</span>
             </div>
           </div>
           <div class="detail-row">
             <div class="detail-label">Log Level:</div>
             <div class="detail-value">
               <p-tag
+                v-if="selectedLog.logLevel && selectedLog.logLevel !== null"
                 :value="selectedLog.logLevel"
                 :severity="getLogLevelSeverity(selectedLog.logLevel)"
               />
+              <span v-else>-</span>
             </div>
           </div>
           <div class="detail-row">
@@ -202,11 +237,11 @@
 </template>
 
 <script lang="ts">
-import { AUDIT_ERROR_MESSAGES } from '@/constants/appConstants'
+import { AUDIT_ERROR_MESSAGES, DEFAULTS } from '@/constants/appConstants'
 import { logLevelOptions } from '@/constants/logLevelOptions'
 import { operationTypeOptions } from '@/constants/operationTypeOptions'
+import type { AuditLog } from '@/models/auditLog'
 import { AuditLogService } from '@/services/auditLogService'
-import type { AuditLog } from '@/services/encryption/auditLogEncryptionService'
 import { useToastService } from '@/services/toastService'
 import moment from 'moment'
 import Tooltip from 'primevue/tooltip'
@@ -225,13 +260,16 @@ export default defineComponent({
     const loading = ref(false)
     const selectedLog = ref<AuditLog | null>(null)
     const showDetailsDialog = ref(false)
+    const initialLoadComplete = ref(false)
 
-    // Pagination
-    const currentPage = ref(0)
-    const pageSize = ref(10)
+    // Pagination & Sorting
     const first = ref(0)
+    const rows = ref(10)
+    const sortField = ref('timestamp')
+    const sortOrder = ref(-1) // descending by default
+    const currentPage = ref(0)
 
-    // Filters
+    // Filters - These are sent directly to backend
     const selectedOperationType = ref('ALL')
     const selectedLogLevel = ref('ALL')
     const startDate = ref<Date | null>(null)
@@ -244,8 +282,45 @@ export default defineComponent({
     }
 
     // Format date for display
-    const formatDateTime = (date: Date | string): string => {
-      return moment(date).format('YYYY-MM-DD HH:mm:ss')
+    const formatDateTime = (date: Date | string | any[] | null): string => {
+      if (!date) return 'N/A'
+
+      try {
+        // If it's already a Date object
+        if (date instanceof Date) {
+          return moment(date).format('YYYY-MM-DD HH:mm:ss')
+        }
+
+        // If it's an array format [year, month, day, hour, minute, second, nanosecond]
+        if (Array.isArray(date) && date.length >= 6) {
+          const [year, month, day, hour, minute, second] = date
+          // JavaScript months are 0-indexed (0=January, 11=December)
+          const jsDate = new Date(year, month - 1, day, hour, minute, second)
+          return moment(jsDate).format('YYYY-MM-DD HH:mm:ss')
+        }
+
+        // If it's a string, parse it
+        if (typeof date === 'string') {
+          return moment(date).format('YYYY-MM-DD HH:mm:ss')
+        }
+
+        console.warn('Unhandled date format:', date)
+        return 'Invalid date'
+      } catch (error) {
+        console.warn('Error formatting date:', date, error)
+        return 'Invalid date'
+      }
+    }
+
+    // Format action type to be more readable
+    const formatActionType = (actionType: string): string => {
+      if (!actionType || actionType === 'null') return 'N/A'
+
+      // Convert USER_LOGIN to "User Login"
+      return actionType
+        .split('_')
+        .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
+        .join(' ')
     }
 
     // Get severity class for operation type
@@ -273,33 +348,45 @@ export default defineComponent({
 
     // Truncate long resource names
     const getShortResourceName = (name: string): string => {
-      if (!name) return 'N/A'
+      if (!name || name === 'null') return 'N/A'
       return name.length > 30 ? `${name.substring(0, 30)}...` : name
     }
 
-    // Load audit logs with current filters and pagination
-    const loadAuditLogs = async () => {
+    // Log debug info about a single audit log entry
+    const debugAuditLog = (log: AuditLog): void => {
+      console.debug('Audit log entry:', {
+        id: log.id,
+        timestamp: log.timestamp,
+        formattedTimestamp: formatDateTime(log.timestamp),
+        operationType: log.operationType,
+        logLevel: log.logLevel,
+        actionType: log.actionType
+      })
+    }
+
+    // Load audit logs from backend with filters applied
+    const fetchAuditLogs = async () => {
       loading.value = true
+      initialLoadComplete.value = false
 
       try {
-        // Validate date range if both dates are provided
-        if (startDate.value && endDate.value && startDate.value > endDate.value) {
-          handleError(AUDIT_ERROR_MESSAGES.INVALID_DATE_RANGE)
-          loading.value = false
-          return
-        }
-
         const result = await AuditLogService.getAuditLogs({
-          page: currentPage.value,
-          size: pageSize.value,
+          page: 0,
+          size: DEFAULTS.LARGE_PAGE_SIZE,
           operationType: selectedOperationType.value,
           level: selectedLogLevel.value,
           startDate: formatDateForApi(startDate.value),
           endDate: formatDateForApi(endDate.value)
         })
 
+        if (result.auditLogs.length > 0) {
+          // Debug the first few entries to see if timestamps and other fields are correct
+          debugAuditLog(result.auditLogs[0])
+        }
+
         auditLogs.value = result.auditLogs
         totalRecords.value = result.totalCount
+        initialLoadComplete.value = true
       } catch (error) {
         handleError(error, AUDIT_ERROR_MESSAGES.FETCH_LOGS_FAILED)
         auditLogs.value = []
@@ -309,11 +396,20 @@ export default defineComponent({
       }
     }
 
-    // Apply filters and reload data
+    // Apply filters by fetching from API
     const applyFilters = () => {
-      currentPage.value = 0
+      // Validate date range
+      if (startDate.value && endDate.value && startDate.value > endDate.value) {
+        handleError(AUDIT_ERROR_MESSAGES.INVALID_DATE_RANGE)
+        return
+      }
+
+      // Reset pagination when applying filters
       first.value = 0
-      loadAuditLogs()
+      currentPage.value = 0
+
+      // Fetch with filters
+      fetchAuditLogs()
     }
 
     // Reset all filters
@@ -322,17 +418,25 @@ export default defineComponent({
       selectedLogLevel.value = 'ALL'
       startDate.value = null
       endDate.value = null
-      currentPage.value = 0
       first.value = 0
-      loadAuditLogs()
+      currentPage.value = 0
+
+      // Re-fetch with no filters
+      fetchAuditLogs()
     }
 
-    // Handle page change
+    // Handle page change - refetch from backend
     const onPageChange = (event: any) => {
       first.value = event.first
-      pageSize.value = event.rows
+      rows.value = event.rows
       currentPage.value = Math.floor(event.first / event.rows)
-      loadAuditLogs()
+      fetchAuditLogs()
+    }
+
+    // Handle sort change (client-side only for displayed data)
+    const onSortChange = (event: any) => {
+      sortField.value = event.sortField
+      sortOrder.value = event.sortOrder
     }
 
     // View log details
@@ -343,32 +447,46 @@ export default defineComponent({
 
     // Load initial data
     onMounted(() => {
-      loadAuditLogs()
+      fetchAuditLogs()
     })
 
     return {
+      // Data
       auditLogs,
       totalRecords,
       loading,
+      initialLoadComplete,
       operationTypeOptions,
       logLevelOptions,
+
+      // Filters
       selectedOperationType,
       selectedLogLevel,
       startDate,
       endDate,
-      currentPage,
-      pageSize,
+
+      // Pagination & Sorting
       first,
+      rows,
+      sortField,
+      sortOrder,
+      currentPage,
+
+      // Dialog
       selectedLog,
       showDetailsDialog,
+
+      // Methods
       formatDateTime,
+      formatActionType,
       getOperationTypeSeverity,
       getLogLevelSeverity,
       getShortResourceName,
-      loadAuditLogs,
+      fetchAuditLogs,
       applyFilters,
       resetFilters,
       onPageChange,
+      onSortChange,
       viewLogDetails
     }
   }
@@ -384,27 +502,69 @@ export default defineComponent({
   display: flex;
   flex-wrap: wrap;
   gap: 1rem;
-  margin-bottom: 2rem;
-  align-items: flex-start;
+  margin-bottom: 1rem;
+  align-items: center;
+  background-color: var(--surface-section);
+  border-radius: 8px;
 }
 
-.filter-item {
-  min-width: 200px;
-  flex: 1;
+.button-container {
+  display: flex;
+  margin-bottom: 1rem;
 }
 
 .filter-actions {
   display: flex;
   gap: 0.5rem;
-  margin-top: auto;
+  align-items: center;
 }
 
-:deep(.p-dropdown) {
+.filter-item {
+  min-width: 200px;
   width: 100%;
+}
+
+.filter-item-with-label {
+  min-width: 200px;
+  width: calc(25% - 0.75rem);
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.filter-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+  margin-left: 0.25rem;
+  color: var(--text-color-secondary);
+}
+
+:deep(.p-select) {
+  width: 100%;
+  height: 38px;
 }
 
 :deep(.p-date-picker) {
   width: 100%;
+}
+
+:deep(.p-paginator-content .p-select) {
+  width: 5rem;
+  min-width: unset;
+}
+
+:deep(.p-select .p-select-label),
+:deep(.p-inputtext) {
+  padding: 0.5rem 1rem;
+  height: 38px;
+  display: flex;
+  align-items: center;
+}
+
+.audit-table {
+  background-color: var(--surface-section);
+  border-radius: 8px;
 }
 
 :deep(.p-datatable-header) {
@@ -418,10 +578,17 @@ export default defineComponent({
   font-size: 0.75rem;
 }
 
-/* Audit details dialog */
+:deep(.p-datatable thead th) {
+  background-color: var(--surface-ground);
+  padding: 0.75rem 1rem;
+}
+
+:deep(.p-datatable-tbody td) {
+  padding: 0.75rem 1rem;
+}
+
 .audit-details-dialog {
   max-width: 700px;
-  width: 90vw;
 }
 
 .details-content {
@@ -464,28 +631,14 @@ export default defineComponent({
   word-break: break-word;
 }
 
-/* Mobile responsiveness */
 @media (max-width: 768px) {
   .filter-container {
     flex-direction: column;
   }
 
-  .filter-item {
+  .filter-item-with-label {
     width: 100%;
-  }
-
-  .filter-actions {
-    width: 100%;
-    justify-content: space-between;
-  }
-
-  .detail-row {
-    flex-direction: column;
-  }
-
-  .detail-label {
-    width: 100%;
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.5rem;
   }
 }
 </style>
