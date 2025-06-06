@@ -210,3 +210,20 @@ export const PASSWORD_SETTINGS = {
   DEFAULT_CHARSET:
     'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+[]{}|;:,.<>?'
 }
+
+export const NOTIFICATION_ERROR_MESSAGES = {
+  FETCH_FAILED: 'Failed to retrieve notifications',
+  FETCH_NOTIFICATION_FAILED: 'Failed to retrieve notification',
+  FETCH_UNREAD_COUNT_FAILED: 'Failed to retrieve unread notification count',
+  UPDATE_STATUS_FAILED: 'Failed to update notification status',
+  MARK_ALL_READ_FAILED: 'Failed to mark all notifications as read',
+  DELETE_FAILED: 'Failed to delete notification',
+  NOTIFICATION_NOT_FOUND: 'Notification not found'
+}
+
+export const NOTIFICATION_SUCCESS_MESSAGES = {
+  DELETE_SUCCESS: 'Notification deleted successfully',
+  MARK_READ_SUCCESS: 'Notification marked as read',
+  MARK_UNREAD_SUCCESS: 'Notification marked as unread',
+  MARK_ALL_READ_SUCCESS: 'All notifications marked as read'
+}

@@ -23,5 +23,11 @@ export const API_PATHS = {
   },
   AUDIT: {
     LOGS: '/api/audit-logs'
+  },
+  NOTIFICATIONS: {
+    BASE: '/api/notifications',
+    UNREAD_COUNT: '/api/notifications/unread-count',
+    READ_STATUS: '/api/notifications/read-status',
+    MARK_ALL_READ: '/api/notifications/mark-all-read'
   }
 }

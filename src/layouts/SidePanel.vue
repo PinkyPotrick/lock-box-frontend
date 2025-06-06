@@ -48,11 +48,13 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, onMounted, ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
-import { getCookies } from '@/utils/cookiesUtils'
-import { useAuthStore } from '@/stores/authStore'
 import { handleLogout } from '@/services/authService'
+import { NotificationService } from '@/services/notificationService'
+import { useAuthStore } from '@/stores/authStore'
+import { getCookies } from '@/utils/cookiesUtils'
+import { eventBus } from '@/utils/eventBus'
+import { computed, defineComponent, onMounted, onUnmounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 export default defineComponent({
   setup() {
@@ -66,14 +68,45 @@ export default defineComponent({
     // Track unseen notifications count
     const unseenCount = ref(0)
 
+    // Set up polling interval
+    const pollingInterval = ref<number | null>(null)
+    const POLL_INTERVAL = 30000 // Poll every 30 seconds
+
     // Fetch unseen notifications count
     const fetchUnseenNotifications = async () => {
-      // Your existing code for fetching notifications
+      // Only fetch if user is logged in
+      if (!isLoggedIn.value) return
+
+      try {
+        const count = await NotificationService.getUnreadCount()
+        unseenCount.value = count
+      } catch (error) {
+        console.error('Failed to fetch unread notification count:', error)
+        // Don't update count on error to avoid resetting to 0 erroneously
+      }
+    }
+
+    // Start polling for notification count
+    const startPolling = () => {
+      // Initial fetch
+      fetchUnseenNotifications()
+
+      // Set up interval for periodic updates
+      pollingInterval.value = window.setInterval(fetchUnseenNotifications, POLL_INTERVAL)
+    }
+
+    // Stop polling
+    const stopPolling = () => {
+      if (pollingInterval.value) {
+        clearInterval(pollingInterval.value)
+        pollingInterval.value = null
+      }
     }
 
     // Handle logout click
     const handleLogoutClick = async () => {
       try {
+        stopPolling() // Stop polling on logout
         await handleLogout()
         router.push('/login')
       } catch (error) {
@@ -86,7 +119,20 @@ export default defineComponent({
     }
 
     onMounted(() => {
-      fetchUnseenNotifications()
+      if (isLoggedIn.value) {
+        startPolling()
+
+        // Listen for notification count updates from other components
+        eventBus.on('notification-count-updated', (count: number) => {
+          unseenCount.value = count
+        })
+      }
+    })
+
+    // Clean up on component unmount
+    onUnmounted(() => {
+      stopPolling()
+      eventBus.off('notification-count-updated', () => {})
     })
 
     return {
