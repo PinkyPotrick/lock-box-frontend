@@ -430,7 +430,6 @@ export default defineComponent({
       first.value = event.first
       rows.value = event.rows
       currentPage.value = Math.floor(event.first / event.rows)
-      fetchAuditLogs()
     }
 
     // Handle sort change (client-side only for displayed data)

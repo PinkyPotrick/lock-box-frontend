@@ -20,7 +20,36 @@
     <!-- Login history chart -->
     <div class="overview-card login-chart-card">
       <p-card>
-        <template #title>Last Logins</template>
+        <template #title>
+          <div class="chart-header">
+            <div>Login Activity (Last {{ displayDayRange }} Days)</div>
+            <div class="date-range-selector">
+              <div class="p-buttonset">
+                <p-button
+                  :class="{ 'p-button-outlined': selectedRange !== '7days' }"
+                  @click="changeRange('7days')"
+                  size="small"
+                >
+                  7 Days
+                </p-button>
+                <p-button
+                  :class="{ 'p-button-outlined': selectedRange !== '30days' }"
+                  @click="changeRange('30days')"
+                  size="small"
+                >
+                  30 Days
+                </p-button>
+                <p-button
+                  :class="{ 'p-button-outlined': selectedRange !== '90days' }"
+                  @click="changeRange('90days')"
+                  size="small"
+                >
+                  90 Days
+                </p-button>
+              </div>
+            </div>
+          </div>
+        </template>
         <template #content>
           <div class="chart-container login-chart">
             <p-progress-spinner v-if="loadingLogins" style="width: 50px" strokeWidth="4" />
@@ -43,12 +72,27 @@
 <script lang="ts">
 import { DashboardService } from '@/services/dashboardService'
 import moment from 'moment'
-import { defineComponent, onMounted, ref } from 'vue'
+import { computed, defineComponent, onMounted, ref } from 'vue'
 
 export default defineComponent({
   setup() {
     const loadingStats = ref(true)
     const loadingLogins = ref(true)
+    const selectedRange = ref('30days')
+
+    // Computed property to display the selected day range
+    const displayDayRange = computed(() => {
+      switch (selectedRange.value) {
+        case '7days':
+          return '7'
+        case '30days':
+          return '30'
+        case '90days':
+          return '90'
+        default:
+          return '30'
+      }
+    })
 
     const chartData = ref({
       labels: ['Vaults', 'Domains', 'Credentials'],
@@ -111,7 +155,9 @@ export default defineComponent({
             text: 'Date'
           },
           ticks: {
-            maxTicksLimit: 10
+            maxTicksLimit: 15,
+            maxRotation: 45,
+            minRotation: 45
           }
         },
         y: {
@@ -167,106 +213,127 @@ export default defineComponent({
       }
     }
 
-    const prepareLoginData = (entries: any[]): any[] => {
-      if (!entries || entries.length === 0) return []
+    // Function to change the date range
+    const changeRange = (range: string) => {
+      selectedRange.value = range
+      fetchLoginHistory()
+    }
 
-      // Group entries by date and sum the counts
+    // Convert selectedRange to the appropriate number of days
+    const getDaysFromSelectedRange = (): number => {
+      switch (selectedRange.value) {
+        case '7days':
+          return 7
+        case '90days':
+          return 90
+        case '30days':
+        default:
+          return 30
+      }
+    }
+
+    // Update fetchLoginHistory in the script section:
+    const fetchLoginHistory = async () => {
+      try {
+        loadingLogins.value = true
+
+        // Pass the days parameter to the service method
+        const loginHistoryData = await DashboardService.getLoginHistory(getDaysFromSelectedRange())
+
+        if (loginHistoryData && loginHistoryData.entries && loginHistoryData.entries.length > 0) {
+          // Since backend already returns the exact number of days we requested,
+          // we don't need to generate empty days, but we'll still process the data consistently
+          const processedEntries = prepareLoginDataFromResponse(loginHistoryData.entries)
+          updateChartWithData(processedEntries)
+        } else {
+          // No login data available, generate empty data for the selected range
+          const emptyData = generateEmptyData(getDaysFromSelectedRange())
+          updateChartWithData(emptyData)
+        }
+      } catch (error) {
+        console.error('Failed to fetch login history:', error)
+        // Even on error, show empty chart with date ranges
+        const emptyData = generateEmptyData(getDaysFromSelectedRange())
+        updateChartWithData(emptyData)
+      } finally {
+        loadingLogins.value = false
+      }
+    }
+
+    // Update the data preparation method to work with the backend response
+    const prepareLoginDataFromResponse = (loginHistory: any[]): any[] => {
+      const days = getDaysFromSelectedRange()
+
+      // Create a map for the selected days (including today)
       const dateMap = new Map<string, { count: number; failedCount: number }>()
 
-      entries.forEach((entry) => {
+      // Generate all days in the range to ensure we have a complete dataset
+      for (let i = days - 1; i >= 0; i--) {
+        const date = moment().subtract(i, 'days').format('YYYY-MM-DD')
+        dateMap.set(date, {
+          count: 0,
+          failedCount: 0
+        })
+      }
+
+      // Fill in actual data from the response
+      loginHistory.forEach((entry) => {
         const date = entry.date || entry.loginDate || entry.timestamp || new Date().toISOString()
         // Format to YYYY-MM-DD for consistent grouping
         const formattedDate = date.split('T')[0]
 
-        if (!dateMap.has(formattedDate)) {
-          dateMap.set(formattedDate, {
-            count: 0,
-            failedCount: 0
-          })
+        if (dateMap.has(formattedDate)) {
+          const current = dateMap.get(formattedDate)!
+          current.count += entry.count || entry.loginCount || 1
+          current.failedCount += entry.failedCount || 0
         }
-
-        const current = dateMap.get(formattedDate)!
-        current.count += entry.count || entry.loginCount || 1
-        current.failedCount += entry.failedCount || 0
       })
 
-      // Convert map back to array and sort by date
-      const aggregatedEntries = Array.from(dateMap.entries()).map(([date, data]) => ({
-        date,
-        count: data.count,
-        failedCount: data.failedCount
-      }))
-
-      // Sort by date ascending
-      return aggregatedEntries.sort(
-        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-      )
+      // Convert map to array and sort by date
+      return Array.from(dateMap.entries())
+        .map(([date, data]) => ({
+          date,
+          count: data.count,
+          failedCount: data.failedCount
+        }))
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
     }
 
-    const ensureDateContext = (entries: any[]): any[] => {
-      if (entries.length === 0) return []
+    // Add a method to generate empty data when needed
+    const generateEmptyData = (days: number): any[] => {
+      const emptyData = []
 
-      // Get the earliest and latest dates
-      const sortedEntries = [...entries].sort(
-        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-      )
-
-      const firstDate = new Date(sortedEntries[0].date)
-      const lastDate = new Date(sortedEntries[sortedEntries.length - 1].date)
-
-      // Add 2 days before and 2 days after to ensure surrounding context
-      const startDate = new Date(firstDate)
-      startDate.setDate(firstDate.getDate() - 2)
-
-      const endDate = new Date(lastDate)
-      endDate.setDate(lastDate.getDate() + 2)
-
-      // Create the full date range with zeros for missing dates
-      const result = []
-      const existingDates = new Map(entries.map((entry) => [entry.date, entry]))
-
-      for (
-        let currentDate = new Date(startDate);
-        currentDate <= endDate;
-        currentDate.setDate(currentDate.getDate() + 1)
-      ) {
-        const dateStr = currentDate.toISOString().split('T')[0]
-
-        if (existingDates.has(dateStr)) {
-          // Use existing data
-          result.push(existingDates.get(dateStr))
-        } else {
-          // Add a zero-data entry for this date
-          result.push({
-            date: dateStr,
-            count: 0,
-            failedCount: 0
-          })
-        }
+      for (let i = days - 1; i >= 0; i--) {
+        const date = moment().subtract(i, 'days').format('YYYY-MM-DD')
+        emptyData.push({
+          date,
+          count: 0,
+          failedCount: 0
+        })
       }
 
-      return result
+      return emptyData
     }
 
     const updateChartWithData = (entries: any[]) => {
-      // Add surrounding context dates
-      const entriesWithContext = ensureDateContext(entries)
-
-      // Format dates for display
-      const labels = entriesWithContext.map((entry) => {
+      // Format dates for display (MM-DD format)
+      const labels = entries.map((entry) => {
         const date = new Date(entry.date)
-        return `${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`
+        return `${(date.getMonth() + 1).toString().padStart(2, '0')}-${date
+          .getDate()
+          .toString()
+          .padStart(2, '0')}`
       })
 
-      const loginCounts = entriesWithContext.map((entry) => entry.count)
-      const failedCounts = entriesWithContext.map((entry) => entry.failedCount)
+      const loginCounts = entries.map((entry) => entry.count)
+      const failedCounts = entries.map((entry) => entry.failedCount)
 
       // Update chart data
       loginChartData.value.labels = labels
       loginChartData.value.datasets[0].data = loginCounts
 
       // Handle failed logins if they exist
-      if (entriesWithContext.some((entry) => entry.failedCount > 0)) {
+      if (entries.some((entry) => entry.failedCount > 0)) {
         if (loginChartData.value.datasets.length === 1) {
           loginChartData.value.datasets.push({
             label: 'Failed Logins',
@@ -282,32 +349,10 @@ export default defineComponent({
         // Remove failed logins dataset if no failed logins
         loginChartData.value.datasets.pop()
       }
-    }
 
-    const fetchLoginHistory = async () => {
-      try {
-        loadingLogins.value = true
-        const loginHistoryData = await DashboardService.getLoginHistory()
-
-        if (loginHistoryData && loginHistoryData.entries && loginHistoryData.entries.length > 0) {
-          // Properly aggregate login entries by date
-          const processedEntries = prepareLoginData(loginHistoryData.entries)
-
-          // Adjust Y-axis max value based on the highest count
-          const maxValue = Math.max(...processedEntries.map((e) => e.count))
-          loginChartOptions.value.scales.y.suggestedMax = Math.max(5, Math.ceil(maxValue * 1.2))
-
-          // Use the updated chart data method for all cases, no special handling for single date
-          updateChartWithData(processedEntries)
-        } else {
-          loginChartData.value.labels = []
-          loginChartData.value.datasets[0].data = []
-        }
-      } catch (error) {
-        console.error('Failed to fetch login history:', error)
-      } finally {
-        loadingLogins.value = false
-      }
+      // Adjust Y-axis max value based on the highest count
+      const maxValue = Math.max(...loginCounts, ...failedCounts)
+      loginChartOptions.value.scales.y.suggestedMax = Math.max(5, Math.ceil(maxValue * 1.2))
     }
 
     onMounted(() => {
@@ -321,7 +366,10 @@ export default defineComponent({
       loginChartData,
       loginChartOptions,
       loadingStats,
-      loadingLogins
+      loadingLogins,
+      selectedRange,
+      displayDayRange,
+      changeRange
     }
   }
 })
@@ -368,6 +416,24 @@ export default defineComponent({
   height: 100%;
 }
 
+/* Header with range selector */
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.date-range-selector {
+  display: flex;
+  gap: 0.5rem;
+
+  .p-buttonset .p-button {
+    flex: 1;
+    margin: 0 0.25rem;
+  }
+}
+
 @media (max-width: 768px) {
   .chart-container {
     height: 250px;
@@ -375,6 +441,27 @@ export default defineComponent({
 
   .login-chart {
     height: 350px;
+  }
+
+  .chart-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .date-range-selector {
+    width: 100%;
+  }
+
+  .date-range-selector .p-buttonset {
+    display: flex;
+    width: 100%;
+  }
+
+  .date-range-selector .p-buttonset .p-button {
+    flex: 1;
   }
 }
 </style>

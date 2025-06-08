@@ -56,9 +56,10 @@ export class DashboardService {
 
   /**
    * Fetches login history data from the server
+   * @param days Number of days to retrieve (defaults to 30)
    * @returns processed login history data response
    */
-  static async fetchLoginHistoryData() {
+  static async fetchLoginHistoryData(days = 30) {
     const token = getAuthToken()
 
     if (!token) {
@@ -75,6 +76,9 @@ export class DashboardService {
         success: boolean
         message?: string
       }>(API_PATHS.DASHBOARD.LOGIN_HISTORY, {
+        params: {
+          days
+        },
         headers: {
           Authorization: `Bearer ${token}`
         }
@@ -140,11 +144,12 @@ export class DashboardService {
 
   /**
    * Gets the login history for chart display
+   * @param days Number of days to retrieve (defaults to 30)
    * @returns Array of login history data points
    */
-  static async getLoginHistory() {
+  static async getLoginHistory(days = 30) {
     try {
-      const loginHistoryResponse = await this.fetchLoginHistoryData()
+      const loginHistoryResponse = await this.fetchLoginHistoryData(days)
 
       if (!loginHistoryResponse || !Array.isArray(loginHistoryResponse.loginHistories)) {
         throw new ApiError(
