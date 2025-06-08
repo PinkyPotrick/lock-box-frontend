@@ -135,7 +135,12 @@
 
       <p-column field="message" header="Message">
         <template #body="{ data }">
-          <div class="notification-message">{{ getTruncatedMessage(data.message) }}</div>
+          <div
+            class="notification-message"
+            v-tooltip.top="{ value: data.message, fitContent: true }"
+          >
+            {{ getTruncatedMessage(data.message) }}
+          </div>
         </template>
       </p-column>
 
@@ -408,7 +413,8 @@ export default defineComponent({
     }
 
     const getTruncatedMessage = (message: string): string => {
-      return message.length > 80 ? `${message.substring(0, 80)}...` : message
+      const baseLength = window.innerWidth < 1200 ? 40 : 80
+      return message.length > baseLength ? `${message.substring(0, baseLength)}...` : message
     }
 
     // Style methods
