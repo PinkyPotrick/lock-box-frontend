@@ -95,9 +95,16 @@ export const AUTH_ERROR_MESSAGES = {
   LOGOUT_FAILED: 'Failed to log out',
   MISSING_CREDENTIALS: 'Username, email, or password is missing',
   INVALID_SESSION_TOKEN: 'Invalid or missing session token',
+  INVALID_SESSION_DATA: 'Invalid session data. Please try logging in again.',
   INVALID_SERVER_VALUE: 'Authentication failed: Invalid server value B',
+  INVALID_AUTH_STATE: 'Invalid authentication state. Please start over.',
+  SESSION_EXPIRED: 'Session expired. Please log in again.',
   PROOF_VERIFICATION_FAILED: 'Proof verification failed. Authorization aborted!',
-  NO_ACTIVE_SESSION: 'No active session to logout from'
+  NO_ACTIVE_SESSION: 'No active session to logout from',
+  TOTP_REQUIRED: 'Two-factor authentication code required',
+  TOTP_INVALID: 'Invalid TOTP authentication',
+  TOTP_SESSION_EXPIRED: 'TOTP session expired. Please try again.',
+  TOTP_VERIFICATION_FAILED: 'TOTP verification failed. Please check your code and try again.'
 }
 
 export const AUTH_SUCCESS_MESSAGES = {
@@ -120,7 +127,16 @@ export const PROFILE_ERROR_MESSAGES = {
   DECRYPT_PROFILE_FAILED: 'Failed to decrypt user profile data',
   PASSWORD_CHANGE_FAILED: 'Failed to change password',
   USERNAME_MISSING: 'Username not found in session storage',
-  INVALID_PASSWORD: 'Invalid password format'
+  INVALID_PASSWORD: 'Invalid password format',
+  TOTP_SETUP_FAILED: 'Failed to set up two-factor authentication',
+  TOTP_VERIFY_FAILED: 'Failed to verify two-factor authentication code',
+  TOTP_DISABLE_FAILED: 'Failed to disable two-factor authentication',
+  INVALID_TOTP: 'Invalid verification code. Please try again.'
+}
+
+export const PROFILE_SUCCESS_MESSAGES = {
+  TOTP_SETUP_SUCCESS: 'Two-factor authentication has been successfully set up',
+  TOTP_DISABLE_SUCCESS: 'Two-factor authentication has been disabled'
 }
 
 export const PASSWORD_CHANGE_ERROR_MESSAGES = {

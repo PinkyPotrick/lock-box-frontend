@@ -101,6 +101,7 @@ export class ProfileService {
           // Including username property to satisfy the User interface
           username: decryptedProfileData.username || '',
           email: decryptedProfileData.email,
+          totpEnabled: decryptedProfileData.totpEnabled,
           createdAt,
           updatedAt
         }

@@ -1,10 +1,10 @@
-import {
-  encryptWithPublicKey,
-  encryptWithAESCBC,
-  decryptWithAESCBC,
-  decryptWithPrivateKey
-} from '@/utils/encryptionUtils'
 import { padHex } from '@/utils/dataTypesUtils'
+import {
+  decryptWithAESCBC,
+  decryptWithPrivateKey,
+  encryptWithAESCBC,
+  encryptWithPublicKey
+} from '@/utils/encryptionUtils'
 import { SecureApiService } from '../secureApiService'
 
 /**
@@ -124,6 +124,25 @@ export class LoginEncryptionService {
       encryptedServerPublicValueB.encryptedDataBase64,
       encryptedServerPublicValueB.ivBase64,
       encryptedServerPublicValueB.hmacBase64,
+      helperSrpParamsAesKey
+    )
+  }
+
+  /**
+   * Decrypts TOTP session ID if TOTP is required
+   *
+   * @param encryptedTotpSessionId Encrypted TOTP session ID
+   * @param helperSrpParamsAesKey Helper AES key for decryption
+   * @returns Decrypted TOTP session ID
+   */
+  static decryptTotpSessionId(
+    encryptedTotpSessionId: { encryptedDataBase64: string; ivBase64: string; hmacBase64: string },
+    helperSrpParamsAesKey: string
+  ) {
+    return decryptWithAESCBC(
+      encryptedTotpSessionId.encryptedDataBase64,
+      encryptedTotpSessionId.ivBase64,
+      encryptedTotpSessionId.hmacBase64,
       helperSrpParamsAesKey
     )
   }

@@ -17,6 +17,7 @@ export interface EncryptedDataAesCbc {
 export interface ProfileResponse {
   username: string
   email: string
+  totpEnabled: boolean
   createdAt: string | Date | number[]
   updatedAt?: string | Date | number[]
 }

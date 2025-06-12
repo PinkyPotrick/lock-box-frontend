@@ -39,6 +39,15 @@ const routes: Array<RouteRecordRaw> = [
     }
   },
   {
+    path: '/totp-verification',
+    name: 'TOTPVerification',
+    component: () => import('@/components/auth/TOTPVerificationView.vue'),
+    meta: {
+      requiresAuth: false,
+      title: 'Verify Two-Factor Authentication'
+    }
+  },
+  {
     path: '/',
     component: MainLayout,
     name: 'MainLayout',

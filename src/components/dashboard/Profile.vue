@@ -231,15 +231,165 @@
         </div>
       </template>
     </p-card>
+
+    <!-- Two-Factor Authentication (2FA) Card -->
+    <p-card class="totp-card">
+      <template #header>
+        <div class="profile-header">
+          <i class="pi pi-shield profile-icon"></i>
+          <h3>Two-Factor Authentication (2FA)</h3>
+        </div>
+      </template>
+      <template #content>
+        <div class="totp-content">
+          <!-- 2FA Status -->
+          <div v-if="!setupMode" class="totp-status">
+            <div class="status-indicator" :class="{ enabled: user.totpEnabled }">
+              <i
+                :class="user.totpEnabled ? 'pi pi-check-circle' : 'pi pi-exclamation-triangle'"
+              ></i>
+              <span>2FA is {{ user.totpEnabled ? 'Enabled' : 'Disabled' }}</span>
+            </div>
+
+            <div v-if="!user.totpEnabled" class="security-alert">
+              <i class="pi pi-shield"></i>
+              <div class="alert-text">
+                <strong>Enhance Your Account Security</strong>
+                <p>
+                  Two-factor authentication adds an extra layer of security to your account by
+                  requiring a verification code in addition to your password.
+                </p>
+              </div>
+            </div>
+
+            <div class="totp-actions">
+              <p-button
+                v-if="!user.totpEnabled"
+                icon="pi pi-lock"
+                label="Set up 2FA"
+                @click="startSetup"
+                class="p-button-success"
+              ></p-button>
+
+              <p-button
+                v-else
+                icon="pi pi-unlock"
+                label="Disable 2FA"
+                @click="confirmDisable"
+                class="p-button-danger"
+                :disabled="disabling"
+              ></p-button>
+            </div>
+          </div>
+
+          <!-- TOTP Setup Mode -->
+          <div v-if="setupMode" class="totp-setup">
+            <!-- Step 1: Scan QR Code -->
+            <div v-if="setupStep === 1" class="setup-step">
+              <h4>Step 1: Scan QR Code</h4>
+              <div class="qr-container">
+                <div v-if="loading" class="qr-loading">
+                  <p-progress-spinner style="width: 50px" strokeWidth="4" />
+                  <span>Generating your secure key...</span>
+                </div>
+                <div v-else>
+                  <img
+                    v-if="totpSetup.qrCodeUrl"
+                    :src="totpSetup.qrCodeUrl"
+                    alt="QR Code"
+                    class="qr-code"
+                  />
+                  <div class="manual-key">
+                    <p>If you can't scan the QR code, enter this key manually:</p>
+                    <div class="key-display">
+                      <span>{{ totpSetup.manualEntryKey }}</span>
+                      <p-button
+                        icon="pi pi-copy"
+                        @click="copyToClipboard(totpSetup.manualEntryKey)"
+                        class="p-button-text p-button-rounded"
+                      ></p-button>
+                    </div>
+                  </div>
+                  <div class="instructions">
+                    <p>
+                      1. Install an authenticator app like Google Authenticator, Microsoft
+                      Authenticator, or Authy
+                    </p>
+                    <p>2. Scan the QR code or enter the key manually</p>
+                    <p>3. Click Next to verify your setup</p>
+                  </div>
+                </div>
+              </div>
+              <div class="setup-actions">
+                <p-button
+                  label="Cancel"
+                  icon="pi pi-times"
+                  @click="cancelSetup"
+                  class="p-button-text"
+                ></p-button>
+                <p-button
+                  label="Next"
+                  icon="pi pi-arrow-right"
+                  @click="setupStep = 2"
+                  :disabled="loading || !totpSetup.qrCodeUrl"
+                  class="p-button-success"
+                  iconPos="right"
+                ></p-button>
+              </div>
+            </div>
+
+            <!-- Step 2: Verify Code -->
+            <div v-if="setupStep === 2" class="setup-step">
+              <h4>Step 2: Verify Code</h4>
+              <div class="verification-container">
+                <p>Enter the 6-digit code from your authenticator app to verify your setup</p>
+                <div class="code-input">
+                  <label for="verification-code">Verification Code</label>
+                  <p-input-text
+                    id="verification-code"
+                    v-model="verificationCode"
+                    placeholder="Enter 6-digit code"
+                    :class="{ 'p-invalid': verificationError }"
+                    maxlength="6"
+                    keyfilter="int"
+                  ></p-input-text>
+                  <small v-if="verificationError" class="p-error">{{ verificationError }}</small>
+                </div>
+              </div>
+              <div class="setup-actions">
+                <p-button
+                  label="Back"
+                  icon="pi pi-arrow-left"
+                  @click="setupStep = 1"
+                  class="p-button-text"
+                ></p-button>
+                <p-button
+                  label="Verify & Enable"
+                  icon="pi pi-check"
+                  @click="verifyAndEnableTotp"
+                  :loading="verifying"
+                  :disabled="verifying || verificationCode.length !== 6"
+                  class="p-button-success"
+                ></p-button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+    </p-card>
+
+    <!-- Add confirm dialog for disabling 2FA -->
+    <p-confirm-dialog></p-confirm-dialog>
   </div>
 </template>
 
 <script lang="ts">
 import {
-  DATE_FORMATS,
   PASSWORD_CHANGE_ERROR_MESSAGES,
   PASSWORD_CHANGE_INFO_MESSAGES,
-  PASSWORD_CHANGE_SUCCESS_MESSAGES
+  PASSWORD_CHANGE_SUCCESS_MESSAGES,
+  PROFILE_ERROR_MESSAGES,
+  PROFILE_SUCCESS_MESSAGES
 } from '@/constants/appConstants'
 import type { User } from '@/models/user'
 import router from '@/router'
@@ -250,8 +400,11 @@ import { useToastService } from '@/services/toastService'
 import { useAuthStore } from '@/stores/authStore'
 import { useVuelidate } from '@vuelidate/core'
 import { helpers, required } from '@vuelidate/validators'
-import moment from 'moment'
+import { useConfirm } from 'primevue/useconfirm'
 import { computed, defineComponent, onMounted, ref, watch } from 'vue'
+// Import new dependencies
+import type { TOTPSetupResponse } from '@/models/user'
+import { TOTPService } from '@/services/totpService'
 
 // Define password validation rules
 const createPasswordValidator = (message: string) => {
@@ -272,6 +425,7 @@ export default defineComponent({
     const loading = ref(true)
     const authStore = useAuthStore()
     const { handleError, handleSuccess, handleInfo } = useToastService()
+    const confirm = useConfirm()
 
     // Initialize user with data from authStore
     const user = ref<User>({
@@ -473,14 +627,146 @@ export default defineComponent({
       }
     }
 
-    const formatDate = (date: string | Date) => {
-      if (!date) return 'N/A'
-      return moment(date).format(DATE_FORMATS.DISPLAY_DATE)
+    // Add TOTP related state
+    const setupMode = ref(false)
+    const setupStep = ref(1)
+    const totpSetup = ref<TOTPSetupResponse>({
+      secret: '',
+      qrCodeUrl: '',
+      manualEntryKey: ''
+    })
+    const verificationCode = ref('')
+    const verificationError = ref('')
+    const disabling = ref(false)
+    const verifying = ref(false)
+
+    // Start TOTP setup
+    const startSetup = async () => {
+      setupMode.value = true
+      setupStep.value = 1
+      verificationCode.value = ''
+      verificationError.value = ''
+
+      try {
+        loading.value = true
+        const setupData = await TOTPService.setupTOTP()
+        totpSetup.value = setupData
+      } catch (error) {
+        console.error('Failed to setup TOTP:', error)
+        handleError(error, PROFILE_ERROR_MESSAGES.TOTP_SETUP_FAILED)
+        cancelSetup()
+      } finally {
+        loading.value = false
+      }
     }
+
+    // Cancel setup
+    const cancelSetup = () => {
+      setupMode.value = false
+      setupStep.value = 1
+      verificationCode.value = ''
+      verificationError.value = ''
+      totpSetup.value = {
+        secret: '',
+        qrCodeUrl: '',
+        manualEntryKey: ''
+      }
+    }
+
+    // Verify and enable TOTP
+    const verifyAndEnableTotp = async () => {
+      if (verificationCode.value.length !== 6) {
+        verificationError.value = 'Please enter a 6-digit code'
+        return
+      }
+
+      verificationError.value = ''
+      verifying.value = true
+
+      try {
+        const success = await TOTPService.verifyTOTP(verificationCode.value)
+        if (success) {
+          user.value.totpEnabled = true
+          setupMode.value = false
+          handleSuccess(PROFILE_SUCCESS_MESSAGES.TOTP_SETUP_SUCCESS)
+
+          // Dispatch event to notify MainLayout about TOTP status change
+          window.dispatchEvent(new CustomEvent('totp-status-changed'))
+        } else {
+          verificationError.value = 'Invalid verification code. Please try again.'
+        }
+      } catch (error) {
+        console.error('Failed to verify TOTP:', error)
+        verificationError.value = 'Failed to verify code. Please try again.'
+        handleError(error, PROFILE_ERROR_MESSAGES.TOTP_VERIFY_FAILED)
+      } finally {
+        verifying.value = false
+      }
+    }
+
+    // Confirm disable TOTP
+    const confirmDisable = () => {
+      confirm.require({
+        message:
+          'Are you sure you want to disable two-factor authentication? This will reduce your account security.',
+        header: 'Disable 2FA',
+        icon: 'pi pi-exclamation-triangle',
+        acceptClass: 'p-button-danger',
+        accept: () => disableTotp()
+      })
+    }
+
+    // Disable TOTP
+    const disableTotp = async () => {
+      disabling.value = true
+
+      try {
+        const success = await TOTPService.disableTOTP()
+        if (success) {
+          user.value.totpEnabled = false
+          handleSuccess(PROFILE_SUCCESS_MESSAGES.TOTP_DISABLE_SUCCESS)
+
+          // Dispatch event to notify MainLayout about TOTP status change
+          window.dispatchEvent(new CustomEvent('totp-status-changed'))
+        }
+      } catch (error) {
+        console.error('Failed to disable TOTP:', error)
+        handleError(error, PROFILE_ERROR_MESSAGES.TOTP_DISABLE_FAILED)
+      } finally {
+        disabling.value = false
+      }
+    }
+
+    // Copy to clipboard utility
+    const copyToClipboard = (text: string) => {
+      navigator.clipboard
+        .writeText(text)
+        .then(() => {
+          handleSuccess('Copied to clipboard')
+        })
+        .catch((err) => {
+          console.error('Failed to copy:', err)
+        })
+    }
+
+    // Reset verification error when code is changed
+    watch(verificationCode, () => {
+      verificationError.value = ''
+    })
 
     onMounted(() => {
       fetchUserProfile()
     })
+
+    const formatDate = (dateInput: string | Date) => {
+      if (!dateInput) return 'N/A'
+      const date = dateInput instanceof Date ? dateInput : new Date(dateInput)
+      return date.toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      })
+    }
 
     return {
       user,
@@ -498,7 +784,20 @@ export default defineComponent({
       passwordHasUppercase,
       passwordHasLowercase,
       passwordHasDigit,
-      passwordHasSpecial
+      passwordHasSpecial,
+      // TOTP setup
+      setupMode,
+      setupStep,
+      totpSetup,
+      verificationCode,
+      verificationError,
+      disabling,
+      verifying,
+      startSetup,
+      cancelSetup,
+      verifyAndEnableTotp,
+      confirmDisable,
+      copyToClipboard
     }
   }
 })
@@ -892,5 +1191,185 @@ small.p-error {
 /* Target back button specifically */
 .p-button.p-button-text.p-button-success {
   padding-left: 0;
+}
+
+/* TOTP Card Styles */
+.totp-card {
+  margin-top: 2rem;
+}
+
+.totp-content {
+  padding: 1.5rem;
+}
+
+.totp-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  font-size: 1.2rem;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  background-color: rgba(255, 87, 87, 0.1);
+  color: #ff5757;
+}
+
+.status-indicator.enabled {
+  background-color: rgba(52, 181, 110, 0.1);
+  color: #34b56e;
+}
+
+.status-indicator i {
+  font-size: 1.5rem;
+  margin-right: 0.75rem;
+}
+
+.security-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  background-color: rgba(255, 165, 0, 0.1);
+  border-left: 4px solid #ffa500;
+  padding: 1rem;
+  border-radius: 4px;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.security-alert i {
+  color: #ffa500;
+  font-size: 1.5rem;
+}
+
+.alert-text strong {
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.alert-text p {
+  margin: 0;
+  color: var(--text-color-secondary);
+}
+
+.totp-actions {
+  margin-top: 1rem;
+}
+
+/* Setup Styles */
+.totp-setup {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.setup-step {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.setup-step h4 {
+  font-size: 1.2rem;
+  margin: 0;
+  text-align: center;
+}
+
+.qr-container,
+.verification-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  border-radius: 8px;
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.qr-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 2rem;
+}
+
+.qr-code {
+  max-width: 200px;
+  max-height: 200px;
+  padding: 1rem;
+  background-color: white;
+  border-radius: 8px;
+}
+
+.manual-key {
+  text-align: center;
+  margin-top: 1rem;
+}
+
+.key-display {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background-color: rgba(255, 255, 255, 0.1);
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 1.1rem;
+  margin-top: 0.5rem;
+}
+
+.instructions {
+  margin-top: 1.5rem;
+  text-align: left;
+}
+
+.instructions p {
+  margin: 0.5rem 0;
+  color: var(--text-color-secondary);
+}
+
+.code-input {
+  width: 100%;
+  max-width: 250px;
+  margin: 1rem 0;
+}
+
+.code-input label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+
+.setup-actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 1.5rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .totp-content {
+    padding: 1rem;
+  }
+
+  .security-alert {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .setup-actions {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .setup-actions .p-button {
+    width: 100%;
+  }
 }
 </style>

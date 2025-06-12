@@ -1,22 +1,13 @@
-import { useAuthStore } from '@/stores/authStore'
-import { bigIntFromBytes } from '@/utils/dataTypesUtils'
-import { getCookies } from '@/utils/cookiesUtils'
-import {
-  AUTH,
-  ERROR_TYPES,
-  GENERIC_ERROR_MESSAGES,
-  HTTP_STATUS,
-  AUTH_ERROR_MESSAGES
-} from '@/constants/appConstants'
+import axios from '@/axios-config'
 import { API_PATHS } from '@/constants/apiPaths'
 import {
-  generateAESKey,
-  getClientKeyPair,
-  generateAndStoreSecureClientKeyPair,
-  storeNewSecureClientKeyPair,
-  deriveEncryptionKey,
-  encryptUsername
-} from '@/utils/encryptionUtils'
+  AUTH,
+  AUTH_ERROR_MESSAGES,
+  ERROR_TYPES,
+  GENERIC_ERROR_MESSAGES,
+  HTTP_STATUS
+} from '@/constants/appConstants'
+import { useAuthStore } from '@/stores/authStore'
 import {
   computeA,
   computeK,
@@ -29,11 +20,20 @@ import {
   generateSalt,
   N
 } from '@/utils/authUtils'
-import { RegistrationEncryptionService } from './encryption/registrationEncryptionService'
-import { LoginEncryptionService } from './encryption/loginEncryptionService'
-import axios from '@/axios-config'
+import { getCookies } from '@/utils/cookiesUtils'
+import { bigIntFromBytes } from '@/utils/dataTypesUtils'
+import {
+  deriveEncryptionKey,
+  encryptUsername,
+  generateAESKey,
+  generateAndStoreSecureClientKeyPair,
+  getClientKeyPair,
+  storeNewSecureClientKeyPair
+} from '@/utils/encryptionUtils'
 import forge from 'node-forge'
 import { ApiError, ApiErrorService } from './apiErrorService'
+import { LoginEncryptionService } from './encryption/loginEncryptionService'
+import { RegistrationEncryptionService } from './encryption/registrationEncryptionService'
 
 /**
  * Prepares user credentials for secure authentication
@@ -262,7 +262,10 @@ export const handleRegister = async (username: string, email: string, password: 
  * @param username - the inserted username value.
  * @param password - the inserted password value.
  */
-export const handleLogin = async (username: string, password: string) => {
+export const handleLogin = async (
+  username: string,
+  password: string
+): Promise<{ success: boolean; requiresTOTP: boolean }> => {
   if (!username || !password) {
     throw new ApiError(
       AUTH_ERROR_MESSAGES.MISSING_CREDENTIALS,
@@ -296,8 +299,13 @@ export const handleLogin = async (username: string, password: string) => {
       })
 
     // Fetch SRP parameters from server
-    const { encryptedServerPublicValueB, helperSrpParamsAesKey, salt } =
-      await fetchSrpParams(encryptedSrpParamsData)
+    const {
+      encryptedServerPublicValueB,
+      encryptedTotpSessionId,
+      helperSrpParamsAesKey,
+      salt,
+      requiresTotp
+    } = await fetchSrpParams(encryptedSrpParamsData)
 
     if (!encryptedServerPublicValueB || !helperSrpParamsAesKey || !salt) {
       throw new ApiError(
@@ -322,6 +330,67 @@ export const handleLogin = async (username: string, password: string) => {
       )
     }
 
+    // Check if TOTP is required
+    if (requiresTotp && encryptedTotpSessionId) {
+      // Decrypt TOTP session ID
+      const totpSessionId = LoginEncryptionService.decryptTotpSessionId(
+        encryptedTotpSessionId,
+        helperSrpParamsAesKey
+      )
+
+      // Store critical data for completing SRP authentication after TOTP
+      sessionStorage.setItem('srp_username', username)
+      sessionStorage.setItem('srp_password', password)
+      sessionStorage.setItem('srp_derived_username', derivedUsername)
+      sessionStorage.setItem('srp_salt', salt)
+      sessionStorage.setItem('srp_client_public_value_a', clientPublicValueA.toString())
+      sessionStorage.setItem('srp_server_public_value_b', serverPublicValueB)
+      sessionStorage.setItem('srp_client_private_value_a', clientPrivateValueA.toString())
+      sessionStorage.setItem('srp_client_private_key_pem', clientPrivateKeyPem)
+      sessionStorage.setItem('srp_server_public_key_pem', serverPublicKeyPem)
+      sessionStorage.setItem('totp_session_id', totpSessionId)
+      sessionStorage.setItem('totp_expiry', (Date.now() + 120000).toString()) // 2 minutes (120 seconds)
+
+      // Return TOTP required status to trigger redirect
+      return {
+        success: false,
+        requiresTOTP: true
+      }
+    }
+
+    // If TOTP not required, proceed with normal authentication
+    return await completeAuthentication(
+      username,
+      password,
+      derivedUsername,
+      salt,
+      clientPublicValueA,
+      serverPublicValueB,
+      clientPrivateValueA,
+      clientPrivateKeyPem,
+      serverPublicKeyPem
+    )
+  } catch (error) {
+    console.error(AUTH_ERROR_MESSAGES.LOGIN_FAILED, error)
+    throw ApiErrorService.handleError(error)
+  }
+}
+
+/**
+ * Completes the SRP authentication after initial password check (and TOTP if required)
+ */
+export const completeAuthentication = async (
+  username: string,
+  password: string,
+  derivedUsername: string,
+  salt: string,
+  clientPublicValueA: bigint,
+  serverPublicValueB: string,
+  clientPrivateValueA: bigint,
+  clientPrivateKeyPem: string,
+  serverPublicKeyPem: string
+): Promise<{ success: boolean; requiresTOTP: boolean }> => {
+  try {
     // Compute SRP proof values
     const privateValueX = computeX(salt, derivedUsername, password)
     const scramblingParameterU = computeU(BigInt(`0x${serverPublicValueB}`))
@@ -372,7 +441,16 @@ export const handleLogin = async (username: string, password: string) => {
     }
 
     // Store session data
-    storeNewSecureClientKeyPair(username, password, userPublicKey, userPrivateKey)
+    if (userPublicKey && userPrivateKey) {
+      storeNewSecureClientKeyPair(username, password, userPublicKey, userPrivateKey)
+    } else {
+      throw new ApiError(
+        GENERIC_ERROR_MESSAGES.INVALID_SERVER_RESPONSE,
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        ERROR_TYPES.API_ERROR
+      )
+    }
+
     const cookies = getCookies()
     cookies.set(
       AUTH.TOKEN_COOKIE_NAME,
@@ -386,7 +464,10 @@ export const handleLogin = async (username: string, password: string) => {
     const authStore = useAuthStore()
     authStore.updateAuthToken()
 
-    return true
+    return {
+      success: true,
+      requiresTOTP: false
+    }
   } catch (error) {
     console.error(AUTH_ERROR_MESSAGES.LOGIN_FAILED, error)
     throw ApiErrorService.handleError(error)

@@ -47,16 +47,17 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import { handleLogin } from '@/services/authService'
 import { useToastService } from '@/services/toastService'
+import { defineComponent, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 export default defineComponent({
   setup() {
     const username = ref('')
     const password = ref('')
     const router = useRouter()
+    const route = useRoute()
     const loading = ref(false)
     const submitted = ref(false)
     const { handleError, handleWarning } = useToastService()
@@ -75,7 +76,17 @@ export default defineComponent({
       setTimeout(async () => {
         try {
           // Handle the login process
-          await handleLogin(username.value, password.value)
+          const { requiresTOTP } = await handleLogin(username.value, password.value)
+
+          // Check if TOTP verification is required
+          if (requiresTOTP) {
+            console.log('TOTP verification required, redirecting...')
+            // Redirect to TOTP verification page
+            router.push({ name: 'TOTPVerification' })
+            return
+          }
+
+          // If we get here, TOTP was not required and login was successful
           loading.value = false
           // Redirect to the dashboard on successful login
           router.push({ name: 'Overview' })
@@ -86,6 +97,14 @@ export default defineComponent({
         }
       }, 10)
     }
+
+    onMounted(() => {
+      // Check if redirected from expired TOTP session
+      const expired = route.query.expired
+      if (expired === 'true') {
+        handleWarning('TOTP verification time expired. Please login again.', 'Session Expired')
+      }
+    })
 
     return {
       username,
