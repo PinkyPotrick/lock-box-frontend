@@ -71,6 +71,7 @@ export const CREDENTIAL_ERROR_MESSAGES = {
   TOGGLE_FAVORITE_FAILED: 'Failed to update favorite status',
   UPDATE_LAST_USED_FAILED: 'Failed to update credential usage data',
   CREDENTIAL_NOT_FOUND: 'Credential with ID {id} not found',
+  VERIFY_CREDENTIAL_FAILED: 'Failed to verify credential',
   INVALID_CATEGORY: 'Invalid category. Allowed categories are: {categories}'
 }
 

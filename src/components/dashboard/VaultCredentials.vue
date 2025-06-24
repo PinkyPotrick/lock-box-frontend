@@ -559,6 +559,33 @@
           <div class="detail-label">Last Used:</div>
           <div class="detail-value">{{ formatDate(viewingCredential.lastUsed) }}</div>
         </div>
+
+        <div class="credential-detail integrity-section">
+          <div class="detail-label">Blockchain Verification:</div>
+          <div class="detail-value integrity-value">
+            <p-button
+              icon="pi pi-shield"
+              :label="verifying ? 'Verifying...' : 'Verify Integrity'"
+              class="p-button-outlined p-button-info"
+              @click="verifyCredentialIntegrity(viewingCredential.id)"
+              :loading="verifying"
+              :disabled="verifying"
+            />
+
+            <div v-if="verificationStatus !== null" class="verification-result">
+              <i
+                :class="`pi ${verificationStatus ? 'pi-check-circle' : 'pi-times-circle'}`"
+                :style="{ color: verificationStatus ? 'var(--green-500)' : 'var(--red-500)' }"
+              ></i>
+              <span :style="{ color: verificationStatus ? 'var(--green-500)' : 'var(--red-500)' }">
+                {{ verificationStatus ? 'Verified' : 'Failed' }}
+              </span>
+              <span v-if="verificationTimestamp" class="verification-time">
+                at {{ formatVerificationTime(verificationTimestamp) }}
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
 
       <template #footer>
@@ -688,6 +715,11 @@ export default defineComponent({
       updatedAt: new Date(),
       lastUsed: undefined as Date | undefined
     })
+
+    // Verification state
+    const verifying = ref(false)
+    const verificationStatus = ref<null | boolean>(null)
+    const verificationTimestamp = ref<Date | null>(null)
 
     // Validation rules
     const rules = {
@@ -1217,6 +1249,41 @@ export default defineComponent({
       }
     }
 
+    // Verify credential integrity
+    const verifyCredentialIntegrity = async (id: string) => {
+      verifying.value = true
+      verificationStatus.value = null
+
+      try {
+        const verified = await CredentialService.verifyCredentialIntegrity(vaultId.value, id)
+        verificationStatus.value = verified
+        verificationTimestamp.value = new Date()
+
+        if (verified) {
+          handleSuccess('Credential integrity verified on blockchain')
+        } else {
+          handleError(
+            new Error('Integrity verification failed'),
+            'Credential verification failed - data may have been compromised'
+          )
+        }
+      } catch (error) {
+        console.error('Failed to verify credential integrity:', error)
+        handleError(
+          error,
+          CREDENTIAL_ERROR_MESSAGES.VERIFY_CREDENTIAL_FAILED ||
+            'Failed to verify credential integrity'
+        )
+        verificationStatus.value = false
+      } finally {
+        verifying.value = false
+      }
+    }
+
+    const formatVerificationTime = (date: Date) => {
+      return moment(date).format('MMM D, YYYY h:mm:ss A')
+    }
+
     // Initialize data
     onMounted(async () => {
       await fetchDomains()
@@ -1308,7 +1375,16 @@ export default defineComponent({
       getDomainName,
       getDomainLogo,
       getDomainUrlById,
-      openDomainUrl
+      openDomainUrl,
+
+      // Verification state
+      verifying,
+      verificationStatus,
+      verificationTimestamp,
+      verifyCredentialIntegrity,
+
+      // Format verification time
+      formatVerificationTime
     }
   }
 })
@@ -1493,5 +1569,30 @@ export default defineComponent({
   width: 4.5rem;
   height: 2.5rem;
   padding: 0.5rem;
+}
+
+.integrity-section {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--surface-border);
+}
+
+.integrity-value {
+  display: flex;
+  flex-direction: row;
+  gap: 0.75rem;
+}
+
+.verification-result {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.verification-time {
+  color: var(--text-color-secondary);
+  font-size: 0.875rem;
+  margin-left: 0.5rem;
 }
 </style>

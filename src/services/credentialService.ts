@@ -642,4 +642,47 @@ export class CredentialService {
       throw ApiErrorService.handleError(error)
     }
   }
+
+  /**
+   * Verifies the integrity of a credential against the blockchain
+   * @param vaultId Vault ID
+   * @param id Credential ID to verify
+   * @returns Verification result
+   */
+  static async verifyCredentialIntegrity(vaultId: string, id: string) {
+    const token = getAuthToken()
+
+    if (!token) {
+      throw new ApiError(
+        GENERIC_ERROR_MESSAGES.AUTH_TOKEN_MISSING,
+        HTTP_STATUS.UNAUTHORIZED,
+        ERROR_TYPES.AUTH_ERROR
+      )
+    }
+
+    try {
+      const response = await axios.get<{
+        item: boolean
+        message?: string
+        statusCode?: number
+        errorType?: string
+      }>(`${API_PATHS.VAULTS.BASE}/${vaultId}/credentials/${id}/verify`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      })
+
+      if (response.data && !response.data.item) {
+        throw new ApiError(
+          response.data.message || `${CREDENTIAL_ERROR_MESSAGES.VERIFY_CREDENTIAL_FAILED} ${id}`,
+          response.data.statusCode || HTTP_STATUS.BAD_REQUEST,
+          response.data.errorType || ERROR_TYPES.API_ERROR
+        )
+      }
+
+      return response?.data?.item
+    } catch (error) {
+      throw ApiErrorService.handleError(error)
+    }
+  }
 }
