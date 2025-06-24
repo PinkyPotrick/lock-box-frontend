@@ -349,7 +349,7 @@ export const handleLogin = async (
       sessionStorage.setItem('srp_client_private_key_pem', clientPrivateKeyPem)
       sessionStorage.setItem('srp_server_public_key_pem', serverPublicKeyPem)
       sessionStorage.setItem('totp_session_id', totpSessionId)
-      sessionStorage.setItem('totp_expiry', (Date.now() + 120000).toString()) // 2 minutes (120 seconds)
+      sessionStorage.setItem('totp_expiry', (Date.now() + 60000).toString()) // 1 minute (60 seconds)
 
       // Return TOTP required status to trigger redirect
       return {

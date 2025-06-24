@@ -38,7 +38,7 @@ export default defineComponent({
   setup() {
     const router = useRouter()
     const sessionId = ref('')
-    const timeRemaining = ref(120) // 2 minutes in seconds
+    const timeRemaining = ref(60) // 1 minute in seconds
     let countdownInterval: number | null = null
 
     const formatTimeRemaining = computed(() => {
