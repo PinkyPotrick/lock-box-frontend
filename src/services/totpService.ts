@@ -224,5 +224,8 @@ export class TOTPService {
     sessionStorage.removeItem('srp_derived_username')
     sessionStorage.removeItem('totp_session_id')
     sessionStorage.removeItem('totp_expiry')
+    sessionStorage.removeItem('last_totp_validation')
+    sessionStorage.removeItem('totp_attempts')
+    sessionStorage.removeItem('totp_locked_until')
   }
 }

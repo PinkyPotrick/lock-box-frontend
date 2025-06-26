@@ -43,6 +43,7 @@ import VueCookies from 'vue-cookies'
 import App from './App.vue'
 import router from './router'
 import { initializeCookies } from './utils/cookiesUtils'
+import { SensitiveOperationService } from '@/services/sensitiveOperationService'
 
 import 'primeicons/primeicons.css'
 import './assets/main.css'
@@ -70,6 +71,9 @@ app.use(pinia)
 
 // Initialize the cookie utility
 initializeCookies(app)
+
+// Initialize the TOTP validation state
+SensitiveOperationService.initializeTOTPValidation()
 
 app
   .component('p-button', Button)

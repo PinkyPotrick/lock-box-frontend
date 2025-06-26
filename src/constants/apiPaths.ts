@@ -11,6 +11,7 @@ export const API_PATHS = {
     PROFILE: '/api/users/profile',
     PASSWORD_CHANGE_INIT: '/api/users/password-change/init',
     PASSWORD_CHANGE_COMPLETE: '/api/users/password-change/complete',
+    VERIFY_OPERATION_TOTP: '/api/users/2fa/verify-operation-totp',
     TOTP_SETUP: '/api/users/2fa/setup',
     TOTP_VERIFY: '/api/users/2fa/verify',
     TOTP_DISABLE: '/api/users/2fa/disable'

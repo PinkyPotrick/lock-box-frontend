@@ -48,8 +48,22 @@
       </template>
       <template #content>
         <div class="security-content">
-          <!-- Simple Custom Stepper -->
-          <div class="custom-stepper">
+          <!-- If no stepper visible yet, show the initial button -->
+          <div v-if="!passwordStepperVisible" class="password-change-prompt">
+            <p>
+              Change your password to maintain account security. We recommend updating your password
+              regularly.
+            </p>
+            <p-button
+              label="Change Password"
+              icon="pi pi-key"
+              @click="startPasswordChange"
+              class="p-button-success"
+            ></p-button>
+          </div>
+
+          <!-- Simple Custom Stepper - Only shown after TOTP verification -->
+          <div v-if="passwordStepperVisible" class="custom-stepper">
             <div class="step-indicators">
               <div
                 class="step-indicator"
@@ -380,6 +394,13 @@
 
     <!-- Add confirm dialog for disabling 2FA -->
     <p-confirm-dialog></p-confirm-dialog>
+
+    <!-- TOTP Verification Dialog -->
+    <TOTPOperationDialog
+      v-model="showTOTPDialog"
+      @verified="handleTOTPVerified"
+      @canceled="handleTOTPCancelled"
+    />
   </div>
 </template>
 
@@ -403,7 +424,10 @@ import { helpers, required } from '@vuelidate/validators'
 import { useConfirm } from 'primevue/useconfirm'
 import { computed, defineComponent, onMounted, ref, watch } from 'vue'
 // Import new dependencies
+import TOTPOperationDialog from '@/components/common/TOTPOperationDialog.vue'
+import { useTOTPOperation } from '@/composables/useTOTPOperation'
 import type { TOTPSetupResponse } from '@/models/user'
+import { SensitiveOperationService } from '@/services/sensitiveOperationService'
 import { TOTPService } from '@/services/totpService'
 
 // Define password validation rules
@@ -421,11 +445,16 @@ const createPasswordValidator = (message: string) => {
 }
 
 export default defineComponent({
+  components: {
+    TOTPOperationDialog
+  },
   setup() {
     const loading = ref(true)
     const authStore = useAuthStore()
     const { handleError, handleSuccess, handleInfo } = useToastService()
     const confirm = useConfirm()
+    const { showTOTPDialog, withTOTPVerification, handleTOTPVerified, handleTOTPCancelled } =
+      useTOTPOperation()
 
     // Initialize user with data from authStore
     const user = ref<User>({
@@ -438,6 +467,7 @@ export default defineComponent({
     // Password change state
     const currentStep = ref(1)
     const passwordChanging = ref(false)
+    const passwordStepperVisible = ref(false)
     const passwordForm = ref({
       currentPassword: '',
       newPassword: '',
@@ -460,15 +490,21 @@ export default defineComponent({
     const passwordHasDigit = computed(() => /[0-9]/.test(passwordForm.value.newPassword))
     const passwordHasSpecial = computed(() => /[^A-Za-z0-9]/.test(passwordForm.value.newPassword))
 
-    // Reset password change process
-    const resetPasswordChange = () => {
-      currentStep.value = 1
+    // Reset password fields
+    const resetPasswordFields = () => {
       passwordForm.value = {
         currentPassword: '',
         newPassword: '',
         confirmPassword: ''
       }
       v$.value.$reset()
+    }
+
+    // Reset password change process
+    const resetPasswordChange = () => {
+      currentStep.value = 1
+      passwordStepperVisible.value = false
+      resetPasswordFields()
       srpState.value = {
         clientPrivateValueA: null,
         clientPublicValueA: null,
@@ -476,6 +512,15 @@ export default defineComponent({
         salt: null,
         helperAesKey: null
       }
+    }
+
+    // Start the password change process with TOTP verification
+    const startPasswordChange = () => {
+      withTOTPVerification('CHANGE_PASSWORD', () => {
+        passwordStepperVisible.value = true
+        currentStep.value = 1
+        resetPasswordFields()
+      })
     }
 
     // Validation rules with dynamic sameAs reference
@@ -690,6 +735,12 @@ export default defineComponent({
           setupMode.value = false
           handleSuccess(PROFILE_SUCCESS_MESSAGES.TOTP_SETUP_SUCCESS)
 
+          // Update TOTP status in SensitiveOperationService
+          SensitiveOperationService.setTOTPEnabled(true)
+
+          // Refresh user profile to ensure all components have updated data
+          await fetchUserProfile()
+
           // Dispatch event to notify MainLayout about TOTP status change
           window.dispatchEvent(new CustomEvent('totp-status-changed'))
         } else {
@@ -725,6 +776,12 @@ export default defineComponent({
         if (success) {
           user.value.totpEnabled = false
           handleSuccess(PROFILE_SUCCESS_MESSAGES.TOTP_DISABLE_SUCCESS)
+
+          // Update TOTP status in SensitiveOperationService
+          SensitiveOperationService.setTOTPEnabled(false)
+
+          // Refresh user profile to ensure all components have updated data
+          await fetchUserProfile()
 
           // Dispatch event to notify MainLayout about TOTP status change
           window.dispatchEvent(new CustomEvent('totp-status-changed'))
@@ -797,7 +854,12 @@ export default defineComponent({
       cancelSetup,
       verifyAndEnableTotp,
       confirmDisable,
-      copyToClipboard
+      copyToClipboard,
+      passwordStepperVisible,
+      startPasswordChange,
+      showTOTPDialog,
+      handleTOTPVerified,
+      handleTOTPCancelled
     }
   }
 })
@@ -829,6 +891,19 @@ export default defineComponent({
   padding: 1.5rem;
   display: flex;
   flex-direction: column;
+}
+
+.password-change-prompt {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.password-change-prompt p {
+  max-width: 600px;
+  color: var(--text-color-secondary);
 }
 
 .loading-text {

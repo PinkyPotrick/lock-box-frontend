@@ -257,12 +257,21 @@
       </template>
     </p-dialog>
 
-    <!-- Delete Confirmation -->
+    <!-- Delete Confirmation Dialog -->
     <p-confirm-dialog></p-confirm-dialog>
+
+    <!-- TOTP Verification Dialog -->
+    <TOTPOperationDialog
+      v-model="showTOTPDialog"
+      @verified="handleTOTPVerified"
+      @canceled="handleTOTPCancelled"
+    />
   </div>
 </template>
 
 <script lang="ts">
+import TOTPOperationDialog from '@/components/common/TOTPOperationDialog.vue'
+import { useTOTPOperation } from '@/composables/useTOTPOperation'
 import { DEFAULTS, VAULT_ERROR_MESSAGES, VAULT_SUCCESS_MESSAGES } from '@/constants/appConstants'
 import { type Vault } from '@/services/encryption/vaultEncryptionService'
 import { useToastService } from '@/services/toastService'
@@ -293,10 +302,15 @@ export default defineComponent({
   directives: {
     tooltip: Tooltip
   },
+  components: {
+    TOTPOperationDialog
+  },
   setup() {
     const router = useRouter()
     const confirm = useConfirm()
     const { handleError, handleSuccess } = useToastService()
+    const { showTOTPDialog, withTOTPVerification, handleTOTPVerified, handleTOTPCancelled } =
+      useTOTPOperation()
 
     // Vault data
     const vaults = ref<Vault[]>([])
@@ -498,16 +512,18 @@ export default defineComponent({
     }
 
     const confirmDelete = (vault: Vault) => {
-      confirm.require({
-        message: `Are you sure you want to delete "${vault.name}"? ${
-          vault.credentialCount > 0
-            ? `This vault contains ${vault.credentialCount} credential(s).`
-            : ''
-        }`,
-        header: 'Delete Vault',
-        icon: 'pi pi-exclamation-triangle',
-        acceptClass: 'p-button-danger',
-        accept: () => deleteVault(vault.id)
+      withTOTPVerification('DELETE_VAULT', () => {
+        confirm.require({
+          message: `Are you sure you want to delete "${vault.name}"? ${
+            vault.credentialCount > 0
+              ? `This vault contains ${vault.credentialCount} credential(s).`
+              : ''
+          }`,
+          header: 'Delete Vault',
+          icon: 'pi pi-exclamation-triangle',
+          acceptClass: 'p-button-danger',
+          accept: () => deleteVault(vault.id)
+        })
       })
     }
 
@@ -631,7 +647,12 @@ export default defineComponent({
       cancelCreate,
       cancelEdit,
       formatDate,
-      getIconName
+      getIconName,
+
+      // TOTP dialog
+      showTOTPDialog,
+      handleTOTPVerified,
+      handleTOTPCancelled
     }
   }
 })
@@ -879,4 +900,3 @@ export default defineComponent({
   }
 }
 </style>
-```

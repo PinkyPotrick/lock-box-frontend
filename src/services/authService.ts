@@ -34,6 +34,7 @@ import forge from 'node-forge'
 import { ApiError, ApiErrorService } from './apiErrorService'
 import { LoginEncryptionService } from './encryption/loginEncryptionService'
 import { RegistrationEncryptionService } from './encryption/registrationEncryptionService'
+import { TOTPService } from './totpService'
 
 /**
  * Prepares user credentials for secure authentication
@@ -499,6 +500,9 @@ export const handleLogout = async () => {
 
     // Update the auth store state
     authStore.logout()
+
+    // Clean up TOTP session data including lockout information
+    TOTPService.cleanupTOTPSessionData()
 
     return true
   } catch (error) {

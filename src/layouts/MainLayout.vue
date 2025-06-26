@@ -29,6 +29,7 @@
 <script lang="ts">
 import SidePanel from '@/layouts/SidePanel.vue'
 import { ProfileService } from '@/services/profileService'
+import { SensitiveOperationService } from '@/services/sensitiveOperationService'
 import { useAuthStore } from '@/stores/authStore'
 import { computed, defineComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -85,6 +86,7 @@ export default defineComponent({
         }
       } else {
         isLoadingProfile.value = false
+        SensitiveOperationService.resetTOTPEnabledStatus()
       }
     }
 
@@ -97,6 +99,9 @@ export default defineComponent({
 
         // Fetch user profile to check TOTP status
         await refreshProfileStatus()
+
+        // Check if TOTP is enabled
+        await SensitiveOperationService.isTOTPEnabled()
       } else {
         isLoadingProfile.value = false // Reset loading if not logged in
       }

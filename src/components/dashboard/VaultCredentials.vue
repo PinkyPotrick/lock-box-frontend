@@ -600,12 +600,21 @@
       </template>
     </p-dialog>
 
-    <!-- Delete Confirmation -->
+    <!-- Delete Confirmation Dialog -->
     <p-confirm-dialog></p-confirm-dialog>
+
+    <!-- TOTP Verification Dialog -->
+    <TOTPOperationDialog
+      v-model="showTOTPDialog"
+      @verified="handleTOTPVerified"
+      @canceled="handleTOTPCancelled"
+    />
   </div>
 </template>
 
 <script lang="ts">
+import TOTPOperationDialog from '@/components/common/TOTPOperationDialog.vue'
+import { useTOTPOperation } from '@/composables/useTOTPOperation'
 import {
   CREDENTIAL_ERROR_MESSAGES,
   CREDENTIAL_SUCCESS_MESSAGES,
@@ -637,11 +646,16 @@ export default defineComponent({
   directives: {
     tooltip: Tooltip
   },
+  components: {
+    TOTPOperationDialog
+  },
   setup() {
     const route = useRoute()
     const router = useRouter()
     const confirm = useConfirm()
     const { handleError, handleSuccess, handleInfo } = useToastService()
+    const { showTOTPDialog, withTOTPVerification, handleTOTPVerified, handleTOTPCancelled } =
+      useTOTPOperation()
 
     // Core data
     const vaultId = ref(route.params.vaultId as string)
@@ -838,25 +852,27 @@ export default defineComponent({
       initialLoadComplete.value = false
 
       try {
-        const response = await CredentialService.getAllCredentialsForVault(vaultId.value)
-        credentials.value = response.credentials || []
-        vaultName.value = response.vaultName || 'Vault'
-        totalLoaded.value = credentials.value.length
+        await withTOTPVerification('VIEW_CREDENTIALS_LIST', async () => {
+          const response = await CredentialService.getAllCredentialsForVault(vaultId.value)
+          credentials.value = response.credentials || []
+          vaultName.value = response.vaultName || 'Vault'
+          totalLoaded.value = credentials.value.length
 
-        // Extract unique categories
-        const categories = new Set<string>()
-        credentials.value.forEach((cred) => {
-          if (cred.category) {
-            categories.add(cred.category)
-          }
+          // Extract unique categories
+          const categories = new Set<string>()
+          credentials.value.forEach((cred) => {
+            if (cred.category) {
+              categories.add(cred.category)
+            }
+          })
+
+          availableCategories.value = Array.from(categories).map((cat) => ({
+            name: cat,
+            value: cat
+          }))
+
+          initialLoadComplete.value = true
         })
-
-        availableCategories.value = Array.from(categories).map((cat) => ({
-          name: cat,
-          value: cat
-        }))
-
-        initialLoadComplete.value = true
       } catch (error) {
         console.error('Failed to fetch credentials:', error)
         handleError(error, CREDENTIAL_ERROR_MESSAGES.FETCH_CREDENTIALS_FAILED)
@@ -958,16 +974,18 @@ export default defineComponent({
     }
 
     const startEditCredential = (credential: Credential) => {
-      editCredential.id = credential.id
-      editCredential.username = credential.username
-      editCredential.email = credential.email || ''
-      editCredential.password = credential.password
-      editCredential.notes = credential.notes || ''
-      editCredential.category = credential.category || ''
-      editCredential.favorite = credential.favorite
-      editCredential.domainId = credential.domainId || null
+      withTOTPVerification('EDIT_CREDENTIAL', () => {
+        editCredential.id = credential.id
+        editCredential.username = credential.username
+        editCredential.email = credential.email || ''
+        editCredential.password = credential.password
+        editCredential.notes = credential.notes || ''
+        editCredential.category = credential.category || ''
+        editCredential.favorite = credential.favorite
+        editCredential.domainId = credential.domainId || null
 
-      showEditCredentialDialog.value = true
+        showEditCredentialDialog.value = true
+      })
     }
 
     const updateCredential = async () => {
@@ -1034,21 +1052,23 @@ export default defineComponent({
     }
 
     const viewCredential = (credential: Credential) => {
-      viewingCredential.id = credential.id
-      viewingCredential.domainId = credential.domainId || ''
-      viewingCredential.website =
-        getDomainName(credential.domainId) || credential.website || credential.domainName || ''
-      viewingCredential.username = credential.username
-      viewingCredential.email = credential.email || ''
-      viewingCredential.password = credential.password
-      viewingCredential.notes = credential.notes || ''
-      viewingCredential.category = credential.category || ''
-      viewingCredential.favorite = credential.favorite
-      viewingCredential.updatedAt = credential.updatedAt
-      viewingCredential.lastUsed = credential.lastUsed
+      withTOTPVerification('VIEW_CREDENTIAL', () => {
+        viewingCredential.id = credential.id
+        viewingCredential.domainId = credential.domainId || ''
+        viewingCredential.website =
+          getDomainName(credential.domainId) || credential.website || credential.domainName || ''
+        viewingCredential.username = credential.username
+        viewingCredential.email = credential.email || ''
+        viewingCredential.password = credential.password
+        viewingCredential.notes = credential.notes || ''
+        viewingCredential.category = credential.category || ''
+        viewingCredential.favorite = credential.favorite
+        viewingCredential.updatedAt = credential.updatedAt
+        viewingCredential.lastUsed = credential.lastUsed
 
-      passwordVisible.value = false
-      showViewCredentialDialog.value = true
+        passwordVisible.value = false
+        showViewCredentialDialog.value = true
+      })
     }
 
     const togglePasswordVisibility = () => {
@@ -1115,12 +1135,14 @@ export default defineComponent({
     }
 
     const confirmDelete = (credential: Credential) => {
-      confirm.require({
-        message: `Are you sure you want to delete credential for "${getDomainName(credential.domainId) || credential.website || credential.domainName || 'this website'}"?`,
-        header: 'Delete Credential',
-        icon: 'pi pi-exclamation-triangle',
-        acceptClass: 'p-button-danger',
-        accept: () => deleteCredential(credential.id)
+      withTOTPVerification('DELETE_CREDENTIAL', () => {
+        confirm.require({
+          message: `Are you sure you want to delete credential for "${getDomainName(credential.domainId) || credential.website || credential.domainName || 'this website'}"?`,
+          header: 'Delete Credential',
+          icon: 'pi pi-exclamation-triangle',
+          acceptClass: 'p-button-danger',
+          accept: () => deleteCredential(credential.id)
+        })
       })
     }
 
@@ -1384,7 +1406,12 @@ export default defineComponent({
       verifyCredentialIntegrity,
 
       // Format verification time
-      formatVerificationTime
+      formatVerificationTime,
+
+      // TOTP dialog
+      showTOTPDialog,
+      handleTOTPVerified,
+      handleTOTPCancelled
     }
   }
 })
