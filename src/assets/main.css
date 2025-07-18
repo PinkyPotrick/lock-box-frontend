@@ -1,0 +1,127 @@
+/* @import './base.css'; */
+
+/* #app {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  font-weight: normal;
+} */
+
+/* a,
+.green {
+  text-decoration: none;
+  color: hsla(160, 100%, 37%, 1);
+  transition: 0.4s;
+  padding: 3px;
+}
+
+@media (hover: hover) {
+  a:hover {
+    background-color: hsla(160, 100%, 37%, 0.2);
+  }
+}
+
+@media (min-width: 1024px) {
+  body {
+    display: flex;
+    place-items: center;
+  }
+
+  #app {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    padding: 0 2rem;
+  }
+} */
+
+.header {
+  height: 4vh;
+}
+
+.footer {
+  height: 2vh;
+}
+
+.footer {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+}
+
+.login-container,
+.register-container {
+  min-height: 92vh;
+  min-width: 92vw;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+
+  .password-errors-container {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+.title {
+  margin-bottom: 2rem;
+}
+
+.credentials {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.input-field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin: 5px 0px;
+
+  label {
+    padding: 0px 0px 5px 5px;
+  }
+
+  .p-inputtext,
+  .p-password {
+    width: 100%;
+  }
+
+  .p-textarea {
+    width: 100%;
+  }
+
+  .p-error {
+    color: red;
+    font-size: 0.8rem;
+    margin: 0.5rem 0.2rem 0 0.2rem;
+  }
+}
+
+.login-btn,
+.register-btn {
+  margin-top: 5rem;
+}
+
+.required:after {
+  content: ' *';
+  color: red;
+}
+
+.data-table-container {
+  border-radius: 0.5rem;
+}
+
+.vault-dialog .p-dialog-content {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 50vw;
+
+  .input-field:nth-last-child(2) {
+    margin-bottom: 3rem;
+  }
+}
